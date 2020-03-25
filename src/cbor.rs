@@ -1,7 +1,7 @@
 use crate::generic;
 use crate::ivt::*;
 use crate::util::*;
-use serde_cbor::{self, Value};
+use serde_cbor::Value;
 use std::cell::RefCell;
 use std::collections::BTreeMap; // used in serde_cbor Value::Map
 
@@ -61,6 +61,7 @@ impl From<&Literal> for Value {
             Literal::Bool(b) => Value::Bool(*b),
             Literal::Int(i) => Value::Integer(*i),
             Literal::Float(f) => Value::Float(*f),
+            Literal::Text(t) => Value::Text(t.clone()),
         }
     }
 }
@@ -124,6 +125,8 @@ fn validate_prelude_type(ty: &PreludeType, value: &Value) -> ValidateResult {
     match (ty, value) {
         (PreludeType::Int, Value::Integer(_)) => Ok(()),
         (PreludeType::Int, _) => make_oops("bad int"),
+        (PreludeType::Tstr, Value::Text(_)) => Ok(()),
+        (PreludeType::Tstr, _) => make_oops("bad tstr"),
         _ => unimplemented!(),
     }
 }
@@ -162,19 +165,11 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap) -> ValidateResult {
         // If we fail to validate a value, exit with an error.
         extracted_val.validate(val_node)?;
     }
-    Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn validate_int() {
-        let node: Node = PreludeType::Int.into();
-        let value = Value::Integer(7);
-        node.validate(&value).unwrap();
-
-        let value = Value::Text("abc".into());
-        node.validate(&value).unwrap_err();
+    if working_map.map.into_inner().is_empty() {
+        Ok(())
+    } else {
+        // If the working map isn't empty, that means we had some extra values
+        // that didn't match anything.
+        make_oops("dangling map values")
     }
 }

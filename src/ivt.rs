@@ -25,11 +25,12 @@ pub enum PreludeType {
 }
 
 // A literal value, e.g. 7, 1.3, or "foo"
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Clone)]
 pub enum Literal {
     Bool(bool),
     Int(i128),
     Float(f64),
+    Text(String),
     // TODO: byte string literals, nil?
 }
 
@@ -91,17 +92,11 @@ pub enum Node {
     ArrayVec(ArrayVec),
 }
 
-// FIXME: is this a good idea?  It's handy for unit testing...
-impl From<PreludeType> for Node {
-    fn from(item: PreludeType) -> Node {
-        Node::PreludeType(item)
-    }
-}
 
 // This is just a convenience function, that reverses Node and Value, because
 // it's more intuitive to write node.validate(value) than value.validate(node).
 impl Node {
-    fn validatex<T, V: Validate<T>>(&self, value: &V) -> TempResult<T> {
+    pub fn validatex<T, V: Validate<T>>(&self, value: &V) -> TempResult<T> {
         value.validate(self)
     }
 }

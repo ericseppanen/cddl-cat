@@ -7,3 +7,4 @@ edition = "2018"
 [dependencies]
 cddl = { path = "../cddl_stable" }
 serde_cbor = "0.11"
+serde = "1.0"
