@@ -1,0 +1,9 @@
+[package]
+name = "cddl_validator"
+version = "0.1.0"
+authors = ["Eric Seppanen <eds@reric.net>"]
+edition = "2018"
+
+[dependencies]
+cddl = { path = "../cddl_stable" }
+serde_cbor = "0.11"
