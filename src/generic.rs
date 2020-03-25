@@ -1,9 +1,11 @@
+//! This module contains generic validation helper functions.
+
 use crate::ivt::*;
 use crate::util::*;
 
-/// This module contains generic validation helper functions.
 
 /// Validate a `Choice` containing an arbitrary number of "option" nodes.
+///
 /// If any of the options matches, this validation is successful.
 pub fn validate_choice<T, V: Validate<T>>(choice: &Choice, value: &V) -> TempResult<T> {
     for node in &choice.options {

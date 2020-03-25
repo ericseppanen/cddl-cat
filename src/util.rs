@@ -1,6 +1,10 @@
+//! This module defines error and result types.
+//!
+
 use std::error;
 use std::fmt;
 
+/// A basic error type that contains a string.
 #[derive(Debug, Clone)]
 pub enum ValidateError {
     Oops(String),
@@ -21,12 +25,18 @@ impl error::Error for ValidateError {
     }
 }
 
+/// A placeholder error generator.
+///
+/// This crate doesn't generate useful errors yet.  This is a simple substitute until
+/// it does.
 pub fn make_oops<T>(msg: &str) -> TempResult<T> {
     Err(ValidateError::Oops(msg.into()))
 }
 
-/// A generic validation step that might need to return an intermediate value
+/// A Result that returns some temporary value.
+///
 /// This is used when validating a map key and the map value should be returned.
 pub type TempResult<T> = std::result::Result<T, ValidateError>;
+
 /// A validation that doesn't return anything.
 pub type ValidateResult = TempResult<()>;

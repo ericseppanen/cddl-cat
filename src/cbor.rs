@@ -1,12 +1,13 @@
+//! This module contains code to validate CBOR data.
+//!
+//! More precisely, it validates `serde_cbor::Value` trees.
+
 use crate::generic;
 use crate::ivt::*;
 use crate::util::*;
 use serde_cbor::Value;
 use std::cell::RefCell;
 use std::collections::BTreeMap; // used in serde_cbor Value::Map
-
-/// This module contains code to validate CBOR data.
-/// More precisely, it validates `serde_cbor::Value` trees.
 
 type ValueMap = BTreeMap<Value, Value>;
 
@@ -22,6 +23,11 @@ impl WorkingMap {
             map: RefCell::new(value_map.clone()),
         }
     }
+}
+
+/// The main entry point for validating CBOR data against an IVT.
+pub fn validate_cbor(node: &Node, value: &Value) -> ValidateResult {
+    value.validate(node)
 }
 
 impl Validate<()> for Value {

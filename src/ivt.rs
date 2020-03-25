@@ -1,13 +1,15 @@
+//! This module defines the Intermediate Validation Tree.
+//!
+//! It contains a simplified representation of a CDDL rule, flattened to only
+//! include the parts that are necessary for validation.
+//!
+//! This module doesn't know anything about validating specific types (e.g.
+//! CBOR or JSON), but it helps make writing those validators easier.
+
 use crate::util::*;
 use std::sync::Arc;
 
-/// This module contains the Intermediate Validation Tree.
-/// It contains a simplified representation of a CDDL rule, flattened to only
-/// include the parts that are necessary for validation.
-///
-/// This module doesn't know anything about validating specific types (e.g.
-/// CBOR or JSON), but it helps make writing those validators easier.
-
+/// A trait that allows recursive validation of an AST.
 pub trait Validate<T> {
     fn validate(&self, node: &Node) -> TempResult<T>;
 }
@@ -16,7 +18,7 @@ pub trait Validate<T> {
 pub type ArcNode = Arc<Node>;
 pub type VecNode = Vec<ArcNode>;
 
-// One of the types named in the CDDL prelude
+/// One of the types named in the CDDL prelude.
 #[derive(Debug, Copy, Clone)]
 pub enum PreludeType {
     Int,
@@ -24,7 +26,7 @@ pub enum PreludeType {
     Bstr,
 }
 
-// A literal value, e.g. 7, 1.3, or "foo"
+/// A literal value, e.g. `7`, `1.3`, or ``"foo"``.
 #[derive(Debug, Clone)]
 pub enum Literal {
     Bool(bool),
@@ -35,6 +37,7 @@ pub enum Literal {
 }
 
 /// A rule reference, by name.
+
 // FIXME: this is an awkward type; I don't want it to exist in the final IVT,
 // but I can't think of any way to not require it, at least temporarily, while
 // assembling the tree.  Actual validation code should never see one of these,
@@ -64,7 +67,9 @@ pub struct Map {
 }
 
 /// An array with "record" semantics: a list of types in a specific order.
-/// It has similar semantics to a rust tuple.
+///
+/// It has similar semantics to a rust tuple, though it could also be used
+/// to serialize a struct.
 /// It contains key-value pairs, but the keys are solely for debugging;
 /// they are ignored for validation purposes.
 #[derive(Debug, Clone)]
@@ -80,7 +85,7 @@ pub struct ArrayVec {
     pub element: ArcNode,
 }
 
-/// Any node in the Intermediate Validation Tree
+/// Any node in the Intermediate Validation Tree.
 #[derive(Debug, Clone)]
 pub enum Node {
     Literal(Literal),
