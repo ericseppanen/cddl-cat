@@ -1,36 +1,12 @@
-use std::error;
-use std::fmt;
+use crate::util::*;
 use std::sync::Arc;
 
-#[derive(Debug, Clone)]
-pub enum ValidateError {
-    Oops(String),
-}
-
-impl fmt::Display for ValidateError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ValidateError::Oops(msg) => write!(f, "Oops! {}", msg),
-        }
-    }
-}
-
-// Standard boilerplate, required so other errors can wrap this one.
-impl error::Error for ValidateError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        None
-    }
-}
-
-pub fn make_oops<T>(msg: &str) -> TempResult<T> {
-    Err(ValidateError::Oops(msg.into()))
-}
-
-/// A generic validation step that might need to return an intermediate value
-/// This is used when validating a map key and the map value should be returned.
-pub type TempResult<T> = std::result::Result<T, ValidateError>;
-/// A validation that doesn't return anything.
-pub type ValidateResult = TempResult<()>;
+/// This module contains the Intermediate Validation Tree.
+/// It contains a simplified representation of a CDDL rule, flattened to only
+/// include the parts that are necessary for validation.
+///
+/// This module doesn't know anything about validating specific types (e.g.
+/// CBOR or JSON), but it helps make writing those validators easier.
 
 pub trait Validate<T> {
     fn validate(&self, node: &Node) -> TempResult<T>;
@@ -57,45 +33,53 @@ pub enum Literal {
     // TODO: byte string literals, nil?
 }
 
-// A rule reference, by name.
-// FIXME: how can I replace these with actual owning references (e.g. Arc<Node>)?
-// I think what happens is that the Rule node just gets replaced with an ArcNode that
-// shares ownership of the RHS of the rule (which can be a type, array, map, etc.)
+/// A rule reference, by name.
+// FIXME: this is an awkward type; I don't want it to exist in the final IVT,
+// but I can't think of any way to not require it, at least temporarily, while
+// assembling the tree.  Actual validation code should never see one of these,
+// because it should have been replaced by a reference to another Node.
 #[derive(Debug, Clone)]
 pub struct Rule {
     pub name: String,
 }
 
-// Something that validates if it matches any of the options.
+/// A Choice validates if any one of a set of options validates.
 #[derive(Debug, Clone)]
 pub struct Choice {
     pub options: VecNode,
 }
 
-// Intermediate Key-value pair; key and value can be anything (types, arrays, maps, etc.)
+/// A key-value pair; key and value can be anything (types, arrays, maps, etc.)
 #[derive(Debug, Clone)]
 pub struct KeyValue {
     pub key: ArcNode,
     pub value: ArcNode,
 }
 
+/// A map containing key-value pairs.
 #[derive(Debug, Clone)]
 pub struct Map {
     pub members: Vec<KeyValue>,
 }
 
+/// An array with "record" semantics: a list of types in a specific order.
+/// It has similar semantics to a rust tuple.
+/// It contains key-value pairs, but the keys are solely for debugging;
+/// they are ignored for validation purposes.
 #[derive(Debug, Clone)]
 pub struct ArrayRecord {
     pub elements: Vec<KeyValue>,
 }
 
+/// An array with "vector" semantics: a homogenous list of elements, all of the
+/// same type.
 #[derive(Debug, Clone)]
 pub struct ArrayVec {
     // TODO: handle occurrences
     pub element: ArcNode,
 }
 
-// Any node in the Intermediate Validation Tree
+/// Any node in the Intermediate Validation Tree
 #[derive(Debug, Clone)]
 pub enum Node {
     Literal(Literal),
@@ -120,15 +104,4 @@ impl Node {
     fn validatex<T, V: Validate<T>>(&self, value: &V) -> TempResult<T> {
         value.validate(self)
     }
-}
-
-pub fn validate_choice<T, V: Validate<T>>(choice: &Choice, value: &V) -> TempResult<T> {
-    // A choice validates if any of the options validates
-    for node in &choice.options {
-        let node: &Node = node.as_ref();
-        if let Ok(result) = value.validate(node) {
-            return Ok(result);
-        }
-    }
-    make_oops("choice failed")
 }

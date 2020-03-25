@@ -1,7 +1,12 @@
+use crate::generic;
 use crate::ivt::*;
+use crate::util::*;
 use serde_cbor::{self, Value};
 use std::cell::RefCell;
 use std::collections::BTreeMap; // used in serde_cbor Value::Map
+
+/// This module contains code to validate CBOR data.
+/// More precisely, it validates `serde_cbor::Value` trees.
 
 type ValueMap = BTreeMap<Value, Value>;
 
@@ -27,7 +32,7 @@ impl Validate<()> for Value {
         match node {
             Node::Literal(l) => validate_literal(l, value),
             Node::PreludeType(p) => validate_prelude_type(p, value),
-            Node::Choice(c) => validate_choice(c, value),
+            Node::Choice(c) => generic::validate_choice(c, value),
             Node::Map(m) => validate_map(m, value),
             Node::ArrayRecord(_) => unimplemented!(),
             Node::ArrayVec(_) => unimplemented!(),
@@ -49,6 +54,7 @@ impl Validate<Value> for WorkingMap {
     }
 }
 
+/// Create a `Value` from a `Literal`.
 impl From<&Literal> for Value {
     fn from(l: &Literal) -> Value {
         match l {
@@ -61,7 +67,7 @@ impl From<&Literal> for Value {
 
 fn validate_literal(literal: &Literal, value: &Value) -> ValidateResult {
     if *value == Value::from(literal) {
-        return Ok(())
+        return Ok(());
     }
     make_oops("failed validate_literal")
 }
@@ -76,7 +82,7 @@ fn map_search_literal(literal: &Literal, working_map: &WorkingMap) -> TempResult
             // We found the key, and removed it from the working map.
             // This means validation was successful.
             Ok(val)
-        },
+        }
         None => {
             // We didn't find the key; return an error
             make_oops("failed map_search_literal")
@@ -129,10 +135,6 @@ fn validate_map(m: &Map, value: &Value) -> ValidateResult {
     }
 }
 
-fn exact_key_search(target: &Literal, value_map: &ValueMap) -> bool {
-    false
-}
-
 fn validate_map_part2(m: &Map, value_map: &ValueMap) -> ValidateResult {
     // Strategy for validating a map:
     // 1. We assume that the code that constructed the IVT Map placed the keys
@@ -143,11 +145,11 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap) -> ValidateResult {
     // 3. Iterate over the IVT Map, searching the Value::Map for a matching key.
     // 4. If a match is found, remove the key-value pair from our working copy.
     // 5. Validate the key's corresponding value.
-    // 6. If the key can consume multiple values, repeat the search for this key.
-    // 7. If the key is not found and the key is optional, continue to the next key.
-    // 8. If the key is not found and the key is not optional, return an error.
+    // 6. TODO: If the key can consume multiple values, repeat the search for this key.
+    // 7. TODO: If the key is not found and the key is optional, continue to the next key.
+    // 8. TODO: If the key is not found and the key is not optional, return an error.
 
-    let mut working_map = WorkingMap::new(value_map);
+    let working_map = WorkingMap::new(value_map);
 
     for kv in &m.members {
         let key_node = kv.key.as_ref();
