@@ -22,10 +22,18 @@ impl error::Error for ValidateError {
     }
 }
 
-pub type ValidateResult = std::result::Result<(), ValidateError>;
+pub fn make_oops<T>(msg: &str) -> TempResult<T> {
+    Err(ValidateError::Oops(msg.into()))
+}
 
-pub trait Validate {
-    fn validate(&self, node: &Node) -> ValidateResult;
+/// A generic validation step that might need to return an intermediate value
+/// This is used when validating a map key and the map value should be returned.
+pub type TempResult<T> = std::result::Result<T, ValidateError>;
+/// A validation that doesn't return anything.
+pub type ValidateResult = TempResult<()>;
+
+pub trait Validate<T> {
+    fn validate(&self, node: &Node) -> TempResult<T>;
 }
 
 // Some useful type shortcuts
@@ -109,16 +117,18 @@ impl From<PreludeType> for Node {
 // This is just a convenience function, that reverses Node and Value, because
 // it's more intuitive to write node.validate(value) than value.validate(node).
 impl Node {
-    fn validatex<T: Validate>(&self, value: &T) -> ValidateResult {
+    fn validatex<T, V: Validate<T>>(&self, value: &V) -> TempResult<T> {
         value.validate(self)
     }
 }
 
-pub fn validate_choice<T: Validate>(choice: &Choice, value: &T) -> ValidateResult {
+pub fn validate_choice<T, V: Validate<T>>(choice: &Choice, value: &V) -> TempResult<T> {
     // A choice validates if any of the options validates
     for node in &choice.options {
         let node: &Node = node.as_ref();
-        value.validate(node)?;
+        if let Ok(result) = value.validate(node) {
+            return Ok(result);
+        }
     }
-    Ok(())
+    make_oops("choice failed")
 }

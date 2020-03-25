@@ -19,17 +19,13 @@ impl WorkingMap {
     }
 }
 
-fn make_oops(msg: &str) -> ValidateResult {
-    Err(ValidateError::Oops(msg.into()))
-}
-
-impl Validate for Value {
+impl Validate<()> for Value {
     // This is the main validation dispatch function.
     // It tries to match a Node and a Value, recursing as needed.
     fn validate(&self, node: &Node) -> ValidateResult {
         let value = self;
         match node {
-            Node::Literal(_) => unimplemented!(),
+            Node::Literal(l) => validate_literal(l, value),
             Node::PreludeType(p) => validate_prelude_type(p, value),
             Node::Choice(c) => validate_choice(c, value),
             Node::Map(m) => validate_map(m, value),
@@ -40,11 +36,11 @@ impl Validate for Value {
     }
 }
 
-impl Validate for WorkingMap {
+impl Validate<Value> for WorkingMap {
     // Dispatch for handling Map key types.  This is specialized because
     // some keys (literal values) can be found with a fast search, while
     // others may require a linear search.
-    fn validate(&self, node: &Node) -> ValidateResult {
+    fn validate(&self, node: &Node) -> TempResult<Value> {
         let value_map = self;
         match node {
             Node::Literal(l) => map_search_literal(l, value_map),
@@ -63,16 +59,23 @@ impl From<&Literal> for Value {
     }
 }
 
-fn map_search_literal(literal: &Literal, working_map: &WorkingMap) -> ValidateResult {
+fn validate_literal(literal: &Literal, value: &Value) -> ValidateResult {
+    if *value == Value::from(literal) {
+        return Ok(())
+    }
+    make_oops("failed validate_literal")
+}
+
+fn map_search_literal(literal: &Literal, working_map: &WorkingMap) -> TempResult<Value> {
     // Find a key in the working map, looking for a match.
     // If we find one, remove that key.
     let mut working_mut = working_map.map.borrow_mut();
     let search_key = Value::from(literal);
     match working_mut.remove(&search_key) {
-        Some(_) => {
+        Some(val) => {
             // We found the key, and removed it from the working map.
             // This means validation was successful.
-            Ok(())
+            Ok(val)
         },
         None => {
             // We didn't find the key; return an error
@@ -81,10 +84,15 @@ fn map_search_literal(literal: &Literal, working_map: &WorkingMap) -> ValidateRe
     }
 }
 
-fn map_search(node: &Node, working_map: &WorkingMap) -> ValidateResult {
+fn map_search(node: &Node, working_map: &WorkingMap) -> TempResult<Value> {
     // Iterate over each key in the working map, looking for a match.
     // If we find one, remove that key.
     // This is less efficient than map_search_literal.
+    // Note: we remove the key before learning whether the key's value
+    // has matched.  So we can't support non-"cut" semantics like:
+    // { * tstr => int, * tstr => tstr }
+    // See rfc8610 section 3.5.4 for a longer explanation of "cuts".
+
     let mut working_mut = working_map.map.borrow_mut();
     for key in working_mut.keys() {
         let attempt = key.validate(node);
@@ -94,8 +102,8 @@ fn map_search(node: &Node, working_map: &WorkingMap) -> ValidateResult {
                 // Some juggling is required to satisfy the borrow checker.
                 let key2 = key.clone();
                 drop(key);
-                working_mut.remove(&key2);
-                return Ok(());
+                let val = working_mut.remove(&key2).unwrap();
+                return Ok(val);
             }
             Err(_) => {
                 // This key didn't match, but maybe another one will
@@ -133,8 +141,8 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap) -> ValidateResult {
     //    deterministic results.
     // 2. Make a mutable working copy of the Value::Map contents
     // 3. Iterate over the IVT Map, searching the Value::Map for a matching key.
-    // 4. If a matching key is found, validate the key's corresponding value.
-    // 5. If a match is found, remove the key-value pair from our working copy.
+    // 4. If a match is found, remove the key-value pair from our working copy.
+    // 5. Validate the key's corresponding value.
     // 6. If the key can consume multiple values, repeat the search for this key.
     // 7. If the key is not found and the key is optional, continue to the next key.
     // 8. If the key is not found and the key is not optional, return an error.
@@ -142,12 +150,15 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap) -> ValidateResult {
     let mut working_map = WorkingMap::new(value_map);
 
     for kv in &m.members {
-        let key = kv.key.as_ref();
-        working_map.validate(key)?;
-        //let value = kv.value;
-        // Validate the key and then the value
-
-        //kv.key, kv.value
+        let key_node = kv.key.as_ref();
+        // Validating a key has the side-effect of removing that key from
+        // the working map.
+        // If we fail to validate a key, exit now with an error.
+        // TODO: handle occurrences
+        let extracted_val = working_map.validate(key_node)?;
+        let val_node = kv.value.as_ref();
+        // If we fail to validate a value, exit with an error.
+        extracted_val.validate(val_node)?;
     }
     Ok(())
 }
