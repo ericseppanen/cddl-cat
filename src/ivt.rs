@@ -47,10 +47,18 @@ pub struct Rule {
     pub node_ref: Mutex<Option<Weak<Node>>>,
 }
 
-// Implement Debug by hand so we can ignore the Mutex field.
+// Implement Debug by hand so we can give the Mutex special treatment.
 impl fmt::Debug for Rule {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Rule").field("name", &self.name).finish()
+        let mut bang;
+        let my_name = match self.is_upgraded() {
+            true => {
+                bang = format!("{}!", self.name);
+                &bang
+            }
+            false => &self.name,
+        };
+        f.debug_struct("Rule").field("name", my_name).finish()
     }
 }
 
@@ -76,6 +84,11 @@ impl Rule {
         let mut guard = self.node_ref.lock().unwrap();
         assert!(guard.is_none());
         guard.replace(Arc::downgrade(node));
+    }
+
+    pub fn is_upgraded(&self) -> bool {
+        let mut guard = self.node_ref.lock().unwrap();
+        guard.is_some()
     }
 }
 
