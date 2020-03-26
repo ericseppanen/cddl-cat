@@ -149,6 +149,8 @@ fn map_search(node: &Node, working_map: &WorkingMap) -> TempResult<Value> {
 
 fn validate_prelude_type(ty: &PreludeType, value: &Value) -> ValidateResult {
     match (ty, value) {
+        (PreludeType::Bool, Value::Bool(_)) => Ok(()),
+        (PreludeType::Bool, _) => make_oops("bad int"),
         (PreludeType::Int, Value::Integer(_)) => Ok(()),
         (PreludeType::Int, _) => make_oops("bad int"),
         (PreludeType::Uint, Value::Integer(x)) if *x >= 0 => Ok(()),

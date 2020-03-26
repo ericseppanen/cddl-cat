@@ -22,6 +22,7 @@ pub type VecNode = Vec<ArcNode>;
 /// One of the types named in the CDDL prelude.
 #[derive(Debug, Copy, Clone)]
 pub enum PreludeType {
+    Bool,
     Int,
     Uint,
     Tstr,

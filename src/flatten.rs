@@ -80,7 +80,11 @@ fn replace_rule_refs(rules: &RulesByName) -> MutateResult {
             match node {
                 Node::Rule(rule_ref) => {
                     // FIXME: add graceful handling of nonexistent rule name
-                    let real_ref = rules.get(&rule_ref.name).unwrap();
+                    let real_ref = rules.get(&rule_ref.name);
+                    if real_ref.is_none() {
+                        panic!("tried to access nonexistent rule '{}'", &rule_ref.name);
+                    }
+                    let real_ref = real_ref.unwrap();
                     rule_ref.upgrade(real_ref);
                 }
                 _ => (),
@@ -132,6 +136,9 @@ fn flatten_type2(ty2: &ast::Type2) -> Node {
 
 fn flatten_typename(name: &str) -> Node {
     match name {
+        "bool" => Node::PreludeType(PreludeType::Bool),
+        "false" => Node::Literal(Literal::Bool(false)),
+        "true" => Node::Literal(Literal::Bool(true)),
         "int" => Node::PreludeType(PreludeType::Int),
         "uint" => Node::PreludeType(PreludeType::Uint),
         "tstr" => Node::PreludeType(PreludeType::Tstr),

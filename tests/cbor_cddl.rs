@@ -34,7 +34,6 @@ pub mod cbor {
 }
 
 #[test]
-#[ignore]
 fn validate_cbor_bool() {
     let cddl_input = r#"thing = true"#;
     validate_cbor_from_slice(cddl_input, cbor::BOOL_TRUE).unwrap();
