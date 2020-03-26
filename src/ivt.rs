@@ -23,6 +23,7 @@ pub type VecNode = Vec<ArcNode>;
 #[derive(Debug, Copy, Clone)]
 pub enum PreludeType {
     Int,
+    Uint,
     Tstr,
     Bstr,
 }

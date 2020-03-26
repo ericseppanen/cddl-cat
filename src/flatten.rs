@@ -133,6 +133,7 @@ fn flatten_type2(ty2: &ast::Type2) -> Node {
 fn flatten_typename(name: &str) -> Node {
     match name {
         "int" => Node::PreludeType(PreludeType::Int),
+        "uint" => Node::PreludeType(PreludeType::Uint),
         "tstr" => Node::PreludeType(PreludeType::Tstr),
         // FIXME: lots more prelude types to handle...
         // FIXME: this could be a group name, maybe other things?

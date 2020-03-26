@@ -74,11 +74,13 @@ fn validate_cbor_float() {
 }
 
 #[test]
-#[ignore]
 fn validate_cbor_integer() {
-    let cddl_input = r#"thing = 23 / 24"#;
-    validate_cbor_from_slice(cddl_input, cbor::INT_23).unwrap();
-    validate_cbor_from_slice(cddl_input, cbor::INT_24).unwrap();
+    if false {
+        // FIXME: haven't implemented choice flatten yet.
+        let cddl_input = r#"thing = 23 / 24"#;
+        validate_cbor_from_slice(cddl_input, cbor::INT_23).unwrap();
+        validate_cbor_from_slice(cddl_input, cbor::INT_24).unwrap();
+    }
     let cddl_input = r#"thing = 1"#;
     validate_cbor_from_slice(cddl_input, cbor::NULL).unwrap_err();
     validate_cbor_from_slice(cddl_input, cbor::FLOAT_1_0).unwrap_err();

@@ -151,6 +151,8 @@ fn validate_prelude_type(ty: &PreludeType, value: &Value) -> ValidateResult {
     match (ty, value) {
         (PreludeType::Int, Value::Integer(_)) => Ok(()),
         (PreludeType::Int, _) => make_oops("bad int"),
+        (PreludeType::Uint, Value::Integer(x)) if *x >= 0 => Ok(()),
+        (PreludeType::Uint, _) => make_oops("bad uint"),
         (PreludeType::Tstr, Value::Text(_)) => Ok(()),
         (PreludeType::Tstr, _) => make_oops("bad tstr"),
         _ => unimplemented!(),
