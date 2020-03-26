@@ -1,6 +1,6 @@
 //! This module contains generic validation helper functions.
 
-use crate::ivt::*;
+use crate::ivt::{Rule, Choice, Validate, Node};
 use crate::util::*;
 
 
@@ -15,4 +15,12 @@ pub fn validate_choice<T, V: Validate<T>>(choice: &Choice, value: &V) -> TempRes
         }
     }
     make_oops("choice failed")
+}
+
+/// Validate a `Rule` reference
+///
+/// This just falls through to the referenced `Node`.
+pub fn validate_rule<T, V: Validate<T>>(rule: &Rule, value: &V) -> TempResult<T> {
+    let node = rule.get_ref().unwrap();
+    value.validate(&node)
 }

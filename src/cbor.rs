@@ -42,7 +42,7 @@ impl Validate<()> for Value {
             Node::Map(m) => validate_map(m, value),
             Node::ArrayRecord(_) => unimplemented!(),
             Node::ArrayVec(_) => unimplemented!(),
-            Node::Rule(_) => unreachable!(), // Should never happen
+            Node::Rule(r) => generic::validate_rule(r, value), 
         }
     }
 }

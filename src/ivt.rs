@@ -90,6 +90,13 @@ impl Rule {
         let mut guard = self.node_ref.lock().unwrap();
         guard.is_some()
     }
+
+    pub fn get_ref(&self) -> Option<ArcNode> {
+        let guard = self.node_ref.lock().unwrap();
+        let weak_ref = guard.as_ref()?; // handles Option::None
+        weak_ref.upgrade()
+    }
+
 }
 
 /// A Choice validates if any one of a set of options validates.

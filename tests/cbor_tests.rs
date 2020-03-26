@@ -108,3 +108,13 @@ fn validate_map() {
     // Attempt to match against a different (non-Map) Value type
     Value::Integer(1).validate(node).unwrap_err();
 }
+
+#[test]
+fn validate_rule_ref() {
+    let tmp_rule = Rule::new("seven");
+    let arc = Arc::new(LITERAL_7.clone());
+    tmp_rule.upgrade(&arc);
+    let node2 = &Node::Rule(tmp_rule);
+    gen_value(7).validate(node2).unwrap();
+    gen_value(8).validate(node2).unwrap_err();
+}
