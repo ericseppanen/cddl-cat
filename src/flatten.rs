@@ -73,7 +73,19 @@ fn flatten_type2(ty2: &ast::Type2) -> Node {
     match ty2 {
         // FIXME: this casting is gross.
         Type2::UintValue { value, .. } => Node::Literal(Literal::Int(*value as i128)),
+        Type2::TextValue { value, .. } => Node::Literal(Literal::Text(value.clone())),
+        Type2::Typename { ident, .. } => flatten_typename(&ident.ident),
         _ => unimplemented!(),
+    }
+}
+
+fn flatten_typename(name: &str) -> Node {
+    match name {
+        "int" => Node::PreludeType(PreludeType::Int),
+        "tstr" => Node::PreludeType(PreludeType::Tstr),
+        // FIXME: lots more prelude types to handle...
+        // FIXME: this could be a group name, maybe other things?
+        n => Node::Rule(Rule { name: n.to_string() }),
     }
 }
 
@@ -83,4 +95,28 @@ fn flatten_literal_int() {
     let result = flatten_from_str(cddl_input).unwrap();
     let result = format!("{:?}", result);
     assert_eq!(result, r#"{"thing": Literal(Int(1))}"#);
+}
+
+#[test]
+fn flatten_literal_tstr() {
+    let cddl_input = r#"thing = "abc""#;
+    let result = flatten_from_str(cddl_input).unwrap();
+    let result = format!("{:?}", result);
+    assert_eq!(result, r#"{"thing": Literal(Text("abc"))}"#);
+}
+
+#[test]
+fn flatten_prelude_reference() {
+    let cddl_input = r#"thing = int"#;
+    let result = flatten_from_str(cddl_input).unwrap();
+    let result = format!("{:?}", result);
+    assert_eq!(result, r#"{"thing": PreludeType(Int)}"#);
+}
+
+#[test]
+fn flatten_type_reference() {
+    let cddl_input = r#"thing = foo"#;
+    let result = flatten_from_str(cddl_input).unwrap();
+    let result = format!("{:?}", result);
+    assert_eq!(result, r#"{"thing": Rule(Rule { name: "foo" })}"#);
 }
