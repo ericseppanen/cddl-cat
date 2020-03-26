@@ -20,10 +20,13 @@ use crate::util::ValidateError;
 use cddl::ast::{self, CDDL};
 use cddl::parser::cddl_from_str;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 pub type FlattenResult<T> = std::result::Result<T, ValidateError>;
 
-pub type RulesByName = BTreeMap<String, Node>;
+pub type MutateResult = std::result::Result<(), ValidateError>;
+
+pub type RulesByName = BTreeMap<String, ArcNode>;
 
 pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
     let cddl = cddl_from_str(cddl_input).map_err(|e| {
@@ -37,16 +40,72 @@ pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
 pub fn flatten(ast: &CDDL) -> FlattenResult<RulesByName> {
     println!("{:#?}", ast);
 
+    // This first pass generates a tree of Nodes from the AST.
     let mut rules: RulesByName = ast.rules.iter().map(|rule| flatten_rule(rule)).collect();
-
+    // This second pass substitutes Weak references for by-name rule references.
+    replace_rule_refs(&mut rules);
     Ok(rules)
 }
 
-fn flatten_rule(rule: &ast::Rule) -> (String, Node) {
-    match rule {
-        ast::Rule::Type { rule, .. } => flatten_typerule(rule),
+// Descend recursively into a tree of Nodes, possibly making changes along the way.
+fn mutate_node_tree<F>(node: &mut Node, func: &F)
+where
+    F: FnMut(&Node) -> MutateResult,
+{
+    match node {
+        Node::Literal(_) => (),     // leaf node
+        Node::PreludeType(_) => (), // leaf node
+        Node::Rule(_) => (),        // leaf node
+        Node::Choice(c) => {
+            for mut option in &mut c.options {
+                let mut_option = Arc::get_mut(&mut option).unwrap();
+                mutate_node_tree(mut_option, func);
+            }
+        }
+        Node::Map(m) => {
+            for mut kv in &mut m.members {
+                let mut_key = Arc::get_mut(&mut kv.key).unwrap();
+                mutate_node_tree(mut_key, func);
+                let mut_value = Arc::get_mut(&mut kv.value).unwrap();
+                mutate_node_tree(mut_value, func);
+            }
+        }
+        //Node::ArrayRecord(a) => ___,
+        //Node::ArrayVec(a) => ___,
         _ => unimplemented!(),
     }
+}
+
+fn replace_rule_refs(rules: &mut RulesByName) {
+    for (rule_name, mut arcnode) in rules.iter_mut() {
+        let mut root = Arc::get_mut(arcnode).unwrap();
+        mutate_node_tree(&mut root, &|node| {
+            match node {
+                Node::Rule(rule_ref) => {
+                    println!("hello {}", rule_ref.name);
+                    // FIXME: add graceful handling of nonexistent rule name
+                    let real_ref = rules.get(&rule_ref.name).unwrap();
+                    rule_ref.upgrade(real_ref);
+                }
+                _ => (),
+            }
+            Ok(())
+        })
+    }
+}
+
+// Given a Node containing a Rule reference, replace that Node with
+// a reference to the actual rule tree
+fn replace_node(dest: &mut Node, src: Node) {
+    *dest = src;
+}
+
+fn flatten_rule(rule: &ast::Rule) -> (String, ArcNode) {
+    let (name, node) = match rule {
+        ast::Rule::Type { rule, .. } => flatten_typerule(rule),
+        _ => unimplemented!(),
+    };
+    (name, Arc::new(node))
 }
 
 fn flatten_typerule(typerule: &ast::TypeRule) -> (String, Node) {
@@ -87,9 +146,7 @@ fn flatten_typename(name: &str) -> Node {
         "tstr" => Node::PreludeType(PreludeType::Tstr),
         // FIXME: lots more prelude types to handle...
         // FIXME: this could be a group name, maybe other things?
-        n => Node::Rule(Rule {
-            name: n.to_string(),
-        }),
+        n => Node::Rule(Rule::new(name)),
     }
 }
 

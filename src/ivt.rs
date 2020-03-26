@@ -7,7 +7,8 @@
 //! CBOR or JSON), but it helps make writing those validators easier.
 
 use crate::util::*;
-use std::sync::Arc;
+use std::fmt;
+use std::sync::{Arc, Mutex, Weak};
 
 /// A trait that allows recursive validation of an AST.
 pub trait Validate<T> {
@@ -36,15 +37,46 @@ pub enum Literal {
     // TODO: byte string literals, nil?
 }
 
-/// A rule reference, by name.
-
-// FIXME: this is an awkward type; I don't want it to exist in the final IVT,
-// but I can't think of any way to not require it, at least temporarily, while
-// assembling the tree.  Actual validation code should never see one of these,
-// because it should have been replaced by a reference to another Node.
-#[derive(Debug, Clone)]
+/// A rule reference, with interior mutability.
 pub struct Rule {
     pub name: String,
+    // The actual rule reference is stored in a Mutex so that we can
+    // mutate it later, swapping out by-name references for Arc references.
+    // We use a Weak reference so we don't accidentally create reference
+    // cycles that leak memory.
+    pub node_ref: Mutex<Option<Weak<Node>>>,
+}
+
+// Implement Debug by hand so we can ignore the Mutex field.
+impl fmt::Debug for Rule {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Rule").field("name", &self.name).finish()
+    }
+}
+
+// Implement Clone by hand with special handling for the Mutex
+impl Clone for Rule {
+    fn clone(&self) -> Rule {
+        let name = self.name.clone();
+        let guard = self.node_ref.lock().unwrap();
+        let node_ref = Mutex::new(guard.clone());
+        Rule { name, node_ref }
+    }
+}
+
+impl Rule {
+    // Create a new rule reference by name
+    pub fn new(name: &str) -> Rule {
+        let name = name.to_string();
+        let node_ref = Mutex::new(None);
+        Rule { name, node_ref }
+    }
+    // Upgrade a rule reference to a real Arc reference
+    pub fn upgrade(&self, node: &ArcNode) {
+        let mut guard = self.node_ref.lock().unwrap();
+        assert!(guard.is_none());
+        guard.replace(Arc::downgrade(node));
+    }
 }
 
 /// A Choice validates if any one of a set of options validates.
@@ -64,7 +96,7 @@ impl KeyValue {
     pub fn new(key: Node, value: Node) -> KeyValue {
         let key = Arc::new(key);
         let value = Arc::new(value);
-        KeyValue {key, value}
+        KeyValue { key, value }
     }
 }
 
@@ -104,7 +136,6 @@ pub enum Node {
     ArrayRecord(ArrayRecord),
     ArrayVec(ArrayVec),
 }
-
 
 // This is just a convenience function, that reverses Node and Value, because
 // it's more intuitive to write node.validate(value) than value.validate(node).
