@@ -2,6 +2,7 @@
 //!
 //! More precisely, it validates `serde_cbor::Value` trees.
 
+use crate::flatten::flatten_from_str;
 use crate::generic;
 use crate::ivt::*;
 use crate::util::*;
@@ -30,6 +31,25 @@ pub fn validate_cbor(node: &Node, value: &Value) -> ValidateResult {
     value.validate(node)
 }
 
+// Validate CBOR against a CDDL description.
+pub fn validate_cbor_cddl(cddl: &str, cbor: &[u8]) -> ValidateResult {
+    // Parse the CDDL text and flatten it into IVT form.
+    let flat_cddl = flatten_from_str(cddl)?;
+    let cbor_value: Value = serde_cbor::from_slice(cbor).map_err(|e| {
+        let msg = format!("cbor parsing failed: {}", e);
+        ValidateError::Oops(msg)
+    })?;
+
+    // FIXME: allow selection of which CDDL rule to validate against
+    // FIXME: We stored rules in a BTreeMap, which caused us to lose access to their original
+    // ordering!
+    // For now, just grab the first rule we find.  We'll be wrong some of the time,
+    // but we'll fix that in a moment.
+    let rule_node: &Node = flat_cddl.values().next().unwrap();
+
+    validate_cbor(rule_node, &cbor_value)
+}
+
 impl Validate<()> for Value {
     // This is the main validation dispatch function.
     // It tries to match a Node and a Value, recursing as needed.
@@ -42,7 +62,7 @@ impl Validate<()> for Value {
             Node::Map(m) => validate_map(m, value),
             Node::ArrayRecord(_) => unimplemented!(),
             Node::ArrayVec(_) => unimplemented!(),
-            Node::Rule(r) => generic::validate_rule(r, value), 
+            Node::Rule(r) => generic::validate_rule(r, value),
         }
     }
 }
