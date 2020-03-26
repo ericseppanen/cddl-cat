@@ -38,8 +38,6 @@ pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
 }
 
 pub fn flatten(ast: &CDDL) -> FlattenResult<RulesByName> {
-    println!("{:#?}", ast);
-
     // This first pass generates a tree of Nodes from the AST.
     let rules: RulesByName = ast.rules.iter().map(|rule| flatten_rule(rule)).collect();
     // This second pass adds Weak references for by-name rule references.
@@ -104,7 +102,6 @@ fn flatten_rule(rule: &ast::Rule) -> (String, ArcNode) {
 fn flatten_typerule(typerule: &ast::TypeRule) -> (String, Node) {
     // FIXME: handle generic_param
     // FIXME: handle is_type_choice_alternate
-    println!("flatten_typerule {:#?}", typerule);
     let rhs = flatten_type(&typerule.value);
     (typerule.name.ident.clone(), rhs)
 }
@@ -144,7 +141,6 @@ fn flatten_typename(name: &str) -> Node {
 }
 
 fn flatten_map(group: &ast::Group) -> Node {
-    println!("flatten_map {:#?}", group);
     // FIXME: len > 1 means we should emit a Choice instead.
     assert!(group.group_choices.len() == 1);
     let grpchoice = &group.group_choices[0];
