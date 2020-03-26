@@ -60,6 +60,14 @@ pub struct KeyValue {
     pub value: ArcNode,
 }
 
+impl KeyValue {
+    pub fn new(key: Node, value: Node) -> KeyValue {
+        let key = Arc::new(key);
+        let value = Arc::new(value);
+        KeyValue {key, value}
+    }
+}
+
 /// A map containing key-value pairs.
 #[derive(Debug, Clone)]
 pub struct Map {
