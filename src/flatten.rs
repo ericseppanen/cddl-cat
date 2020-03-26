@@ -94,7 +94,6 @@ fn flatten_typename(name: &str) -> Node {
 }
 
 fn flatten_map(group: &ast::Group) -> Node {
-    use ast::GroupEntry;
     println!("flatten_map {:#?}", group);
     // FIXME: len > 1 means we should emit a Choice instead.
     assert!(group.group_choices.len() == 1);
@@ -104,14 +103,20 @@ fn flatten_map(group: &ast::Group) -> Node {
         .iter()
         .map(|ge_tuple| {
             let group_entry = &ge_tuple.0;
-            match group_entry {
-                GroupEntry::ValueMemberKey { ge, .. } => flatten_vmke(ge),
-                GroupEntry::TypeGroupname { .. } => unimplemented!(),
-                GroupEntry::InlineGroup { .. } => unimplemented!(),
-            }
+            flatten_groupentry(group_entry)
         })
         .collect();
     Node::Map(Map { members: nodes })
+}
+
+fn flatten_groupentry(group_entry: &ast::GroupEntry) -> KeyValue {
+    use ast::GroupEntry;
+    // FIXME: does this need different behavior for maps vs arrays(record or vector)?
+    match group_entry {
+        GroupEntry::ValueMemberKey { ge, .. } => flatten_vmke(ge),
+        GroupEntry::TypeGroupname { .. } => unimplemented!(),
+        GroupEntry::InlineGroup { .. } => unimplemented!(),
+    }
 }
 
 fn flatten_vmke(vmke: &ast::ValueMemberKeyEntry) -> KeyValue {
