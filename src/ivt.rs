@@ -50,7 +50,7 @@ pub struct Rule {
 // Implement Debug by hand so we can give the Mutex special treatment.
 impl fmt::Debug for Rule {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut bang;
+        let bang;
         let my_name = match self.is_upgraded() {
             true => {
                 bang = format!("{}!", self.name);
@@ -87,7 +87,7 @@ impl Rule {
     }
 
     pub fn is_upgraded(&self) -> bool {
-        let mut guard = self.node_ref.lock().unwrap();
+        let guard = self.node_ref.lock().unwrap();
         guard.is_some()
     }
 

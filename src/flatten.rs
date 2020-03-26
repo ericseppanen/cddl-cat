@@ -43,40 +43,41 @@ pub fn flatten(ast: &CDDL) -> FlattenResult<RulesByName> {
     // This first pass generates a tree of Nodes from the AST.
     let rules: RulesByName = ast.rules.iter().map(|rule| flatten_rule(rule)).collect();
     // This second pass adds Weak references for by-name rule references.
-    replace_rule_refs(&rules);
+    replace_rule_refs(&rules)?;
     Ok(rules)
 }
 
 // Descend recursively into a tree of Nodes, running a function against each.
-fn mutate_node_tree<F>(node: &Node, func: &mut F)
+fn mutate_node_tree<F>(node: &Node, func: &mut F) -> MutateResult
 where
     F: FnMut(&Node) -> MutateResult,
 {
     // Apply the function first, then recurse.
-    func(node);
+    func(node)?;
     match node {
         Node::Literal(_) => (),     // leaf node
         Node::PreludeType(_) => (), // leaf node
         Node::Rule(_) => (),        // leaf node
         Node::Choice(c) => {
             for option in &c.options {
-                mutate_node_tree(option.as_ref(), func);
+                mutate_node_tree(option.as_ref(), func)?;
             }
         }
         Node::Map(m) => {
-            for mut kv in &m.members {
-                mutate_node_tree(kv.key.as_ref(), func);
-                mutate_node_tree(kv.value.as_ref(), func);
+            for kv in &m.members {
+                mutate_node_tree(kv.key.as_ref(), func)?;
+                mutate_node_tree(kv.value.as_ref(), func)?;
             }
         }
         //Node::ArrayRecord(a) => ___,
         //Node::ArrayVec(a) => ___,
         _ => unimplemented!(),
     }
+    Ok(())
 }
 
-fn replace_rule_refs(rules: &RulesByName) {
-    for (rule_name, root) in rules.iter() {
+fn replace_rule_refs(rules: &RulesByName) -> MutateResult {
+    for root in rules.values() {
         mutate_node_tree(root, &mut |node| {
             match node {
                 Node::Rule(rule_ref) => {
@@ -87,14 +88,9 @@ fn replace_rule_refs(rules: &RulesByName) {
                 _ => (),
             }
             Ok(())
-        })
+        })?;
     }
-}
-
-// Given a Node containing a Rule reference, replace that Node with
-// a reference to the actual rule tree
-fn replace_node(dest: &mut Node, src: Node) {
-    *dest = src;
+    Ok(())
 }
 
 fn flatten_rule(rule: &ast::Rule) -> (String, ArcNode) {
@@ -143,7 +139,7 @@ fn flatten_typename(name: &str) -> Node {
         "tstr" => Node::PreludeType(PreludeType::Tstr),
         // FIXME: lots more prelude types to handle...
         // FIXME: this could be a group name, maybe other things?
-        n => Node::Rule(Rule::new(name)),
+        _ => Node::Rule(Rule::new(name)),
     }
 }
 
