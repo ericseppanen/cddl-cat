@@ -149,6 +149,7 @@ fn map_search(node: &Node, working_map: &WorkingMap) -> TempResult<Value> {
 
 fn validate_prelude_type(ty: &PreludeType, value: &Value) -> ValidateResult {
     match (ty, value) {
+        (PreludeType::Any, _) => Ok(()),
         (PreludeType::Bool, Value::Bool(_)) => Ok(()),
         (PreludeType::Bool, _) => make_oops("bad int"),
         (PreludeType::Int, Value::Integer(_)) => Ok(()),
@@ -178,22 +179,16 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap) -> ValidateResult {
     // 3. Iterate over the IVT Map, searching the Value::Map for a matching key.
     // 4. If a match is found, remove the key-value pair from our working copy.
     // 5. Validate the key's corresponding value.
-    // 6. TODO: If the key can consume multiple values, repeat the search for this key.
-    // 7. TODO: If the key is not found and the key is optional, continue to the next key.
-    // 8. TODO: If the key is not found and the key is not optional, return an error.
+    // 6. If the key can consume multiple values, repeat the search for this key.
+    // 7. If the key is not found and the key is optional (or we've already consumed
+    //    an acceptable number of keys), continue to the next key.
+    // 8. If the key is not found and we haven't consumed the expected number of
+    //    keys, return an error.
 
-    let working_map = WorkingMap::new(value_map);
+    let mut working_map = WorkingMap::new(value_map);
 
     for kv in &m.members {
-        let key_node = kv.key.as_ref();
-        // Validating a key has the side-effect of removing that key from
-        // the working map.
-        // If we fail to validate a key, exit now with an error.
-        // TODO: handle occurrences
-        let extracted_val = working_map.validate(key_node)?;
-        let val_node = kv.value.as_ref();
-        // If we fail to validate a value, exit with an error.
-        extracted_val.validate(val_node)?;
+        validate_keyvalue(kv, &mut working_map)?;
     }
     if working_map.map.into_inner().is_empty() {
         Ok(())
@@ -202,4 +197,38 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap) -> ValidateResult {
         // that didn't match anything.
         make_oops("dangling map values")
     }
+}
+
+/// Validate a key-value pair against a mutable working map.
+fn validate_keyvalue(kv: &KeyValue, working_map: &mut WorkingMap) -> ValidateResult {
+    let key_node = kv.key.as_ref();
+    let val_node = kv.value.as_ref();
+    let mut count: usize = 0;
+
+    loop {
+        // Walk the working map, trying to match this key.
+        // A successful key match has the side-effect of removing that key from
+        // the working map (returning the value to us.)
+        // If we fail to validate a key, exit now with an error.
+        let extracted_val;
+        match working_map.validate(key_node) {
+            Ok(v) => extracted_val = v,
+            Err(_) => break,
+        }
+        // If we fail to validate a value, exit with an error.
+        match extracted_val.validate(val_node) {
+            Ok(_) => {
+                count += 1;
+                if count >= kv.occur.upper {
+                    // Stop matching; we've consumed the maximum number of this key.
+                    break;
+                }
+            }
+            Err(_) => break,
+        }
+    }
+    if count < kv.occur.lower {
+        return make_oops(&format!("failure to find key-value pair"));
+    }
+    Ok(())
 }

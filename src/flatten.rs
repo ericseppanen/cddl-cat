@@ -136,6 +136,7 @@ fn flatten_type2(ty2: &ast::Type2) -> Node {
 
 fn flatten_typename(name: &str) -> Node {
     match name {
+        "any" => Node::PreludeType(PreludeType::Any),
         "bool" => Node::PreludeType(PreludeType::Bool),
         "false" => Node::Literal(Literal::Bool(false)),
         "true" => Node::Literal(Literal::Bool(true)),
@@ -173,12 +174,37 @@ fn flatten_groupentry(group_entry: &ast::GroupEntry) -> KeyValue {
     }
 }
 
+// FIXME: this was a fun idea, but the implementation is kind of annoying.
+// I think I'd rather go back to the AST-style enum instead of this
+// confusing numeric system.
+impl From<&Option<ast::Occur>> for Occur {
+    fn from(occur: &Option<ast::Occur>) -> Occur {
+        match occur {
+            None => Occur { lower: 1, upper: 1 },
+            Some(ast::Occur::Optional(_)) => Occur { lower: 0, upper: 1 },
+            Some(ast::Occur::ZeroOrMore(_)) => Occur {
+                lower: 0,
+                upper: usize::MAX,
+            },
+            Some(ast::Occur::OneOrMore(_)) => Occur {
+                lower: 1,
+                upper: usize::MAX,
+            },
+            Some(ast::Occur::Exact { lower, upper, .. }) => {
+                let lower = lower.unwrap_or(0);
+                let upper = upper.unwrap_or(usize::MAX);
+                Occur { lower, upper }
+            }
+        }
+    }
+}
+
 fn flatten_vmke(vmke: &ast::ValueMemberKeyEntry) -> KeyValue {
-    // FIXME: handle occurrence
+    let occur = Occur::from(&vmke.occur);
     let member_key = vmke.member_key.as_ref().unwrap(); // FIXME: may be None for arrays
     let key = flatten_memberkey(&member_key);
     let value = flatten_type(&vmke.entry_type);
-    KeyValue::new(key, value)
+    KeyValue::new(key, value, occur)
 }
 
 fn flatten_memberkey(memberkey: &ast::MemberKey) -> Node {
@@ -236,8 +262,7 @@ fn test_flatten_map() {
     let result = flatten_from_str(cddl_input).unwrap();
     let result = format!("{:?}", result);
     let expected = concat!(
-        r#"{"thing": Map(Map { members: [KeyValue "#,
-        r#"{ key: Literal(Text("foo")), value: PreludeType(Tstr) }] })}"#
+        r#"{"thing": Map(Map { members: [KeyValue(Literal(Text("foo")), PreludeType(Tstr))] })}"#
     );
     assert_eq!(result, expected);
 
@@ -248,8 +273,7 @@ fn test_flatten_map() {
     let result = flatten_from_str(cddl_input).unwrap();
     let result = format!("{:?}", result);
     let expected = concat!(
-        r#"{"thing": Map(Map { members: [KeyValue "#,
-        r#"{ key: PreludeType(Tstr), value: PreludeType(Tstr) }] })}"#
+        r#"{"thing": Map(Map { members: [KeyValue(PreludeType(Tstr), PreludeType(Tstr))] })}"#
     );
     assert_eq!(result, expected);
 
@@ -258,9 +282,8 @@ fn test_flatten_map() {
     let result = flatten_from_str(cddl_input).unwrap();
     let result = format!("{:?}", result);
     let expected = concat!(
-        r#"{"foo": Literal(Text("bar")), "#,
-        r#""thing": Map(Map { members: [KeyValue "#,
-        r#"{ key: Rule(Rule { name: "foo!" }), value: PreludeType(Tstr) }] })}"#
+        r#"{"foo": Literal(Text("bar")), "thing": Map(Map { members: ["#,
+        r#"KeyValue(Rule(Rule { name: "foo!" }), PreludeType(Tstr))] })}"#
     );
     // FIXME: is Rule the right output?  What if "abc" was a group name?
     assert_eq!(result, expected);

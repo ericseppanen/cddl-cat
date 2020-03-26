@@ -22,6 +22,7 @@ pub type VecNode = Vec<ArcNode>;
 /// One of the types named in the CDDL prelude.
 #[derive(Debug, Copy, Clone)]
 pub enum PreludeType {
+    Any, // Not really a prelude type, but it's easy to handle here.
     Bool,
     Int,
     Uint,
@@ -98,7 +99,6 @@ impl Rule {
         let weak_ref = guard.as_ref()?; // handles Option::None
         weak_ref.upgrade()
     }
-
 }
 
 /// A Choice validates if any one of a set of options validates.
@@ -108,24 +108,64 @@ pub struct Choice {
 }
 
 /// A key-value pair; key and value can be anything (types, arrays, maps, etc.)
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct KeyValue {
     pub key: ArcNode,
     pub value: ArcNode,
+    pub occur: Occur,
 }
 
 impl KeyValue {
-    pub fn new(key: Node, value: Node) -> KeyValue {
+    pub fn new(key: Node, value: Node, occur: Occur) -> KeyValue {
         let key = Arc::new(key);
         let value = Arc::new(value);
-        KeyValue { key, value }
+        KeyValue { key, value, occur }
     }
+}
+
+/// Occurences measure how many times a value can appear.
+///
+/// Occurrences can always be represented by an inclusive [lower, upper]
+/// count limit.
+///
+/// required         => [1, 1]
+/// optional "?"     => [0, 1]
+/// zero-or-more "*" => [0, MAX]
+/// one-or-more "+"  => [1, MAX]
+///
+#[derive(Debug, Clone)]
+pub struct Occur {
+    pub lower: usize,
+    pub upper: usize,
 }
 
 /// A map containing key-value pairs.
 #[derive(Debug, Clone)]
 pub struct Map {
     pub members: Vec<KeyValue>,
+}
+
+// Implement Debug by hand so we can format it like a map.
+impl fmt::Debug for KeyValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut formatter = f.debug_tuple("KeyValue");
+        let scratch;
+        let occur = match (self.occur.lower, self.occur.upper) {
+            (1, 1) => "",
+            (0, 1) => "?",
+            (0, usize::MAX) => "*",
+            (1, usize::MAX) => "+",
+            (n, m) => {
+                scratch = format!("{}*{}", n, m);
+                &scratch
+            }
+        };
+        if !occur.is_empty() {
+            formatter.field(&occur);
+        }
+
+        formatter.field(&self.key).field(&self.value).finish()
+    }
 }
 
 /// An array with "record" semantics: a list of types in a specific order.
