@@ -123,28 +123,6 @@ impl KeyValue {
     }
 }
 
-/// Occurences measure how many times a value can appear.
-///
-/// Occurrences can always be represented by an inclusive [lower, upper]
-/// count limit.
-///
-/// required         => [1, 1]
-/// optional "?"     => [0, 1]
-/// zero-or-more "*" => [0, MAX]
-/// one-or-more "+"  => [1, MAX]
-///
-#[derive(Debug, Clone)]
-pub struct Occur {
-    pub lower: usize,
-    pub upper: usize,
-}
-
-/// A map containing key-value pairs.
-#[derive(Debug, Clone)]
-pub struct Map {
-    pub members: Vec<KeyValue>,
-}
-
 // Implement Debug by hand so we can format it like a map.
 impl fmt::Debug for KeyValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -168,6 +146,34 @@ impl fmt::Debug for KeyValue {
     }
 }
 
+/// Occurences measure how many times a value can appear.
+///
+/// Occurrences can always be represented by an inclusive [lower, upper]
+/// count limit.
+///
+/// required         => [1, 1]
+/// optional "?"     => [0, 1]
+/// zero-or-more "*" => [0, MAX]
+/// one-or-more "+"  => [1, MAX]
+///
+#[derive(Debug, Clone)]
+pub struct Occur {
+    pub lower: usize,
+    pub upper: usize,
+}
+
+/// A map containing key-value pairs.
+#[derive(Debug, Clone)]
+pub struct Map {
+    pub members: VecNode,
+}
+
+/// A context-free group of key-value pairs.
+#[derive(Debug, Clone)]
+pub struct Group {
+    pub members: VecNode,
+}
+
 /// An array with "record" semantics: a list of types in a specific order.
 ///
 /// It has similar semantics to a rust tuple, though it could also be used
@@ -176,7 +182,7 @@ impl fmt::Debug for KeyValue {
 /// they are ignored for validation purposes.
 #[derive(Debug, Clone)]
 pub struct ArrayRecord {
-    pub elements: Vec<KeyValue>,
+    pub elements: VecNode,
 }
 
 /// An array with "vector" semantics: a homogenous list of elements, all of the
@@ -192,11 +198,13 @@ pub struct ArrayVec {
 pub enum Node {
     Literal(Literal),
     PreludeType(PreludeType),
-    Rule(Rule),
+    Rule(Rule), // FIXME: NameRef
     Choice(Choice),
     Map(Map),
     ArrayRecord(ArrayRecord),
     ArrayVec(ArrayVec),
+    Group(Group), // FIXME: NameRef
+    KeyValue(KeyValue),
 }
 
 // This is just a convenience function, that reverses Node and Value, because

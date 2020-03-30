@@ -65,7 +65,7 @@ fn validate_map() {
         ("Bob", PreludeType::Int),
         ("Carol", PreludeType::Int),
     ];
-    let kv_vec: Vec<KeyValue> = kv_template
+    let kv_vec: VecNode = kv_template
         .iter()
         .map(|kv| {
             let key = kv.0;
@@ -73,7 +73,7 @@ fn validate_map() {
             let value = kv.1;
             let value = Node::PreludeType(value);
             let occur = Occur { lower: 1, upper: 1 };
-            KeyValue::new(key, value, occur)
+            Arc::new(Node::KeyValue(KeyValue::new(key, value, occur)))
         })
         .collect();
     let node = &Node::Map(Map { members: kv_vec });

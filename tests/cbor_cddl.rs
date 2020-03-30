@@ -1,4 +1,5 @@
 use cddl_validator::cbor::validate_cbor_cddl as validate_cbor_from_slice;
+use cddl_validator::cbor::validate_cbor_cddl_named;
 use serde::{Deserialize, Serialize};
 
 #[rustfmt::skip] // allow arbitrary indents for readability
@@ -151,6 +152,12 @@ struct KitchenSink(String, u32, f64, bool);
 
 #[test]
 #[ignore]
+// I'm not sure how much sense this particular test makes.  My guess
+// is that groups really only make sense in the context of an array
+// or map, since I haven't found any way to encode a "group-like"
+// sequence of data.  So the only thing that could even validate
+// against a group directly would be a single value, and I'm not
+// sure that really makes sense.
 fn validate_cbor_group() {
     let cddl_input = r#"thing = (* int)"#;
     validate_cbor_from_slice(cddl_input, cbor::INT_0).unwrap();
@@ -229,6 +236,35 @@ fn validate_cbor_array_record() {
     //validate_cbor_from_slice(cddl_input, &cbor_bytes).unwrap();
 
     validate_cbor_from_slice(cddl_input, cbor::ARRAY_123).unwrap_err();
+}
+
+#[test]
+fn validate_cbor_map_group() {
+    let input = PersonStruct {
+        name: "Bob".to_string(),
+        age: 43,
+    };
+    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cddl_input = r#"thing = {name: tstr, agroup} agroup = (age: int)"#;
+    validate_cbor_cddl_named("thing", cddl_input, &cbor_bytes).unwrap();
+
+    let cddl_input = r#"thing = {agroup} agroup = (age: int, name: tstr)"#;
+    validate_cbor_cddl_named("thing", cddl_input, &cbor_bytes).unwrap();
+
+    let cddl_input = r#"thing = {((agroup))} agroup = (age: int, name: tstr)"#;
+    validate_cbor_cddl_named("thing", cddl_input, &cbor_bytes).unwrap();
+
+    let cddl_input = r#"thing = {agroup empty} agroup = (age: int, name: tstr) empty = ()"#;
+    validate_cbor_cddl_named("thing", cddl_input, &cbor_bytes).unwrap();
+
+    let cddl_input = r#"thing = {agroup maybe} agroup = (age: int, name: tstr) maybe = (? minor: bool)"#;
+    validate_cbor_cddl_named("thing", cddl_input, &cbor_bytes).unwrap();
+
+    let cddl_input = r#"thing = {name: tstr, agroup} agroup = (wrong: int)"#;
+    validate_cbor_cddl_named("thing", cddl_input, &cbor_bytes).unwrap_err();
+
+    let cddl_input = r#"thing = {name: tstr, agroup} agroup = (age: bool)"#;
+    validate_cbor_cddl_named("thing", cddl_input, &cbor_bytes).unwrap_err();
 }
 
 #[test]

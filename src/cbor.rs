@@ -31,6 +31,23 @@ pub fn validate_cbor(node: &Node, value: &Value) -> ValidateResult {
     value.validate(node)
 }
 
+pub fn validate_cbor_cddl_named(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResult {
+    // Parse the CDDL text and flatten it into IVT form.
+    let flat_cddl = flatten_from_str(cddl)?;
+
+    let rule_node: &Node = flat_cddl.get(name).ok_or_else(|| {
+        let msg = format!("rule/group lookup failure: {}", name);
+        ValidateError::Oops(msg)
+    })?;
+
+    let cbor_value: Value = serde_cbor::from_slice(cbor).map_err(|e| {
+        let msg = format!("cbor parsing failed: {}", e);
+        ValidateError::Oops(msg)
+    })?;
+
+    validate_cbor(rule_node, &cbor_value)
+}
+
 // Validate CBOR against a CDDL description.
 pub fn validate_cbor_cddl(cddl: &str, cbor: &[u8]) -> ValidateResult {
     // Parse the CDDL text and flatten it into IVT form.
@@ -40,7 +57,6 @@ pub fn validate_cbor_cddl(cddl: &str, cbor: &[u8]) -> ValidateResult {
         ValidateError::Oops(msg)
     })?;
 
-    // FIXME: allow selection of which CDDL rule to validate against
     // FIXME: We stored rules in a BTreeMap, which caused us to lose access to their original
     // ordering!
     // For now, just grab the first rule we find.  We'll be wrong some of the time,
@@ -63,6 +79,10 @@ impl Validate<()> for Value {
             Node::ArrayRecord(_) => unimplemented!(),
             Node::ArrayVec(_) => unimplemented!(),
             Node::Rule(r) => generic::validate_rule(r, value),
+            Node::Group(g) => {
+                panic!("validate group {:?}", g);
+            }
+            Node::KeyValue(_) => unimplemented!(), // FIXME: can this even happen?
         }
     }
 }
@@ -187,8 +207,8 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap) -> ValidateResult {
 
     let mut working_map = WorkingMap::new(value_map);
 
-    for kv in &m.members {
-        validate_keyvalue(kv, &mut working_map)?;
+    for member in &m.members {
+        validate_map_member(member, &mut working_map)?;
     }
     if working_map.map.into_inner().is_empty() {
         Ok(())
@@ -199,8 +219,34 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap) -> ValidateResult {
     }
 }
 
+fn validate_map_member(member: &ArcNode, working_map: &mut WorkingMap) -> ValidateResult {
+    match member.as_ref() {
+        // FIXME: does it make sense for this to destructure & dispatch
+        // each Node type here?  Is there any way to make this generic?
+        Node::KeyValue(kv) => validate_map_keyvalue(kv, working_map),
+        Node::Rule(r) => {
+            // NOTE!  validate() on a WorkingMap returns a Value (the result of a key-value lookup)
+            //
+            // So we can't use generic::validate() here.  We need to punch down
+            // a level into the rule and match again.
+            let next_node = &r.get_ref().unwrap();
+            validate_map_member(next_node, working_map)
+        }
+        Node::Group(g) => {
+            // Recurse into each member of the group.
+            for group_member in &g.members {
+                // Exit early if we hit an error.
+                validate_map_member(group_member, working_map)?;
+            }
+            // All group members validated Ok.
+            Ok(())
+        }
+        _ => panic!("unhandled map member {:?}", member),
+    }
+}
+
 /// Validate a key-value pair against a mutable working map.
-fn validate_keyvalue(kv: &KeyValue, working_map: &mut WorkingMap) -> ValidateResult {
+fn validate_map_keyvalue(kv: &KeyValue, working_map: &mut WorkingMap) -> ValidateResult {
     let key_node = kv.key.as_ref();
     let val_node = kv.value.as_ref();
     let mut count: usize = 0;

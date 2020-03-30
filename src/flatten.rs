@@ -56,20 +56,26 @@ where
         Node::Literal(_) => (),     // leaf node
         Node::PreludeType(_) => (), // leaf node
         Node::Rule(_) => (),        // leaf node
+        Node::Group(_) => (),       // leaf node
         Node::Choice(c) => {
             for option in &c.options {
                 mutate_node_tree(option.as_ref(), func)?;
             }
         }
         Node::Map(m) => {
-            for kv in &m.members {
-                mutate_node_tree(kv.key.as_ref(), func)?;
-                mutate_node_tree(kv.value.as_ref(), func)?;
+            for member in &m.members {
+                mutate_node_tree(member.as_ref(), func)?;
             }
+        }
+        Node::KeyValue(kv) => {
+            mutate_node_tree(kv.key.as_ref(), func)?;
+            mutate_node_tree(kv.value.as_ref(), func)?;
         }
         //Node::ArrayRecord(a) => ___,
         //Node::ArrayVec(a) => ___,
-        _ => unimplemented!(),
+        _ => {
+            panic!("mutate_node_tree hit {:?}", node)
+        }
     }
     Ok(())
 }
@@ -95,19 +101,35 @@ fn replace_rule_refs(rules: &RulesByName) -> MutateResult {
     Ok(())
 }
 
+/// flatten an ast::Rule to an ivt::Node
+///
+/// Returns (name, node) where the name is the name of the rule (which may
+/// be referenced in other places.
 fn flatten_rule(rule: &ast::Rule) -> (String, ArcNode) {
     let (name, node) = match rule {
         ast::Rule::Type { rule, .. } => flatten_typerule(rule),
-        _ => unimplemented!(),
+        ast::Rule::Group { rule, .. } => flatten_grouprule(rule),
     };
     (name, Arc::new(node))
 }
 
+// returns (name, node) just like flatten_rule()
 fn flatten_typerule(typerule: &ast::TypeRule) -> (String, Node) {
     // FIXME: handle generic_param
     // FIXME: handle is_type_choice_alternate
-    let rhs = flatten_type(&typerule.value);
-    (typerule.name.ident.clone(), rhs)
+    let node = flatten_type(&typerule.value);
+    (typerule.name.ident.clone(), node)
+}
+
+// returns (name, node) just like flatten_rule()
+// FIXME: should groups and rules be kept separate?
+fn flatten_grouprule(grouprule: &ast::GroupRule) -> (String, Node) {
+    // FIXME: handle generic_param
+    // FIXME: handle is_type_choice_alternate
+    let kvs = flatten_groupentry(&grouprule.entry);
+
+    let node = Node::Group(Group { members: kvs });
+    (grouprule.name.ident.clone(), node)
 }
 
 fn flatten_type(ty: &ast::Type) -> Node {
@@ -149,28 +171,47 @@ fn flatten_typename(name: &str) -> Node {
     }
 }
 
+/// Flatten a group into a Map.
 fn flatten_map(group: &ast::Group) -> Node {
+    let kvs = flatten_group(group);
+    Node::Map(Map { members: kvs })
+}
+
+// FIXME: special handling for GroupRule vs Map vs Array?
+fn flatten_group(group: &ast::Group) -> VecNode {
     // FIXME: len > 1 means we should emit a Choice instead.
     assert!(group.group_choices.len() == 1);
     let grpchoice = &group.group_choices[0];
-    let nodes: Vec<KeyValue> = grpchoice
+    let kvs: VecNode = grpchoice
         .group_entries
         .iter()
         .map(|ge_tuple| {
             let group_entry = &ge_tuple.0;
-            flatten_groupentry(group_entry)
+            let mut kv_vec = flatten_groupentry(group_entry);
+            assert!(kv_vec.len() == 1);
+            // FIXME: this seems gross.  Not just the way it's written; the
+            // fact that we need to assume it's a vec of length 1.
+            let first: ArcNode = kv_vec.drain(..).next().unwrap();
+            first
         })
         .collect();
-    Node::Map(Map { members: nodes })
+    kvs
 }
 
-fn flatten_groupentry(group_entry: &ast::GroupEntry) -> KeyValue {
+fn flatten_groupentry(group_entry: &ast::GroupEntry) -> VecNode {
     use ast::GroupEntry;
     // FIXME: does this need different behavior for maps vs arrays(record or vector)?
+
+    // FIXME: this is awkward.  Sometimes we return a KeyValue vec of length 1,
+    // sometimes we return a vec containing a number of KeyValues.
+
     match group_entry {
-        GroupEntry::ValueMemberKey { ge, .. } => flatten_vmke(ge),
-        GroupEntry::TypeGroupname { .. } => unimplemented!(),
-        GroupEntry::InlineGroup { .. } => unimplemented!(),
+        GroupEntry::ValueMemberKey { ge, .. } => vec![Arc::new(flatten_vmke(ge))],
+        GroupEntry::TypeGroupname { ge, .. } => vec![Arc::new(flatten_tge(ge))],
+        GroupEntry::InlineGroup { group, .. } => {
+            // FIXME: handle occurrence
+            flatten_group(group)
+        }
     }
 }
 
@@ -199,12 +240,37 @@ impl From<&Option<ast::Occur>> for Occur {
     }
 }
 
-fn flatten_vmke(vmke: &ast::ValueMemberKeyEntry) -> KeyValue {
+fn flatten_tge(tge: &ast::TypeGroupnameEntry) -> Node {
+    // This is a tricky one.
+    // The incoming TypeGroupnameEntry can mean multiple things.  It carries
+    // an Identifier, which could refer to:
+    // - a prelude type
+    // - a user-defined type rule
+    // - a user-defined group
+    //
+    // It's awkward that we are currently returning KeyValue, because it's
+    // clear that we want to sometimes emit a generic "ref by name" node,
+    // or Literal/Prelude nodes.
+    // Perhaps KeyValue should itself be a Node?
+    // Perhaps there should be a secondary Node type like MemberNode which
+    // can only contain KeyValue or NameRef?
+    // I think that the former is correct: KeyValue should be a Node.
+    //                                     -------------------------
+
+    // FIXME: handle generic_arg
+
+    // FIXME: handle occurrences
+    //let occur = Occur::from(&tge.occur);
+
+    flatten_typename(&tge.name.ident)
+}
+
+fn flatten_vmke(vmke: &ast::ValueMemberKeyEntry) -> Node {
     let occur = Occur::from(&vmke.occur);
     let member_key = vmke.member_key.as_ref().unwrap(); // FIXME: may be None for arrays
     let key = flatten_memberkey(&member_key);
     let value = flatten_type(&vmke.entry_type);
-    KeyValue::new(key, value, occur)
+    Node::KeyValue(KeyValue::new(key, value, occur))
 }
 
 fn flatten_memberkey(memberkey: &ast::MemberKey) -> Node {
@@ -262,7 +328,7 @@ fn test_flatten_map() {
     let result = flatten_from_str(cddl_input).unwrap();
     let result = format!("{:?}", result);
     let expected = concat!(
-        r#"{"thing": Map(Map { members: [KeyValue(Literal(Text("foo")), PreludeType(Tstr))] })}"#
+        r#"{"thing": Map(Map { members: [KeyValue(KeyValue(Literal(Text("foo")), PreludeType(Tstr)))] })}"#
     );
     assert_eq!(result, expected);
 
@@ -273,7 +339,8 @@ fn test_flatten_map() {
     let result = flatten_from_str(cddl_input).unwrap();
     let result = format!("{:?}", result);
     let expected = concat!(
-        r#"{"thing": Map(Map { members: [KeyValue(PreludeType(Tstr), PreludeType(Tstr))] })}"#
+        r#"{"thing": Map(Map { members: ["#,
+        r#"KeyValue(KeyValue(PreludeType(Tstr), PreludeType(Tstr)))] })}"#
     );
     assert_eq!(result, expected);
 
@@ -283,7 +350,7 @@ fn test_flatten_map() {
     let result = format!("{:?}", result);
     let expected = concat!(
         r#"{"foo": Literal(Text("bar")), "thing": Map(Map { members: ["#,
-        r#"KeyValue(Rule(Rule { name: "foo!" }), PreludeType(Tstr))] })}"#
+        r#"KeyValue(KeyValue(Rule(Rule { name: "foo!" }), PreludeType(Tstr)))] })}"#
     );
     // FIXME: is Rule the right output?  What if "abc" was a group name?
     assert_eq!(result, expected);
