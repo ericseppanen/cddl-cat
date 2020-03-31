@@ -373,3 +373,72 @@ fn validate_cbor_map() {
     let cddl_input = r#"thing = {x: int, y: int, z: int}"#;
     validate_cbor_from_slice(cddl_input, cbor::ARRAY_123).unwrap_err();
 }
+
+#[derive(Debug, Serialize)]
+struct StreetNumber {
+    street: String,
+    number: Option<u32>,
+    name: String,
+    zip_code: u32,
+}
+
+#[derive(Debug, Serialize)]
+struct POBox {
+    po_box: u32,
+    name: String,
+    zip_code: u32,
+}
+
+#[derive(Debug, Serialize)]
+struct Pickup {
+    per_pickup: bool,
+}
+
+#[test]
+fn validate_choice_example() {
+    // This is an example from rfc8610 2.2.2
+    // modifications from the RFC example:
+    // 1. The bareword "number" has been changed to "number"; otherwise the parser gets confused.
+    // 2. Substitute "_" for "-" in barewords.
+    let cddl_input = r#"
+        address = { delivery }
+
+        delivery = (
+        street: tstr, ? "number": uint, city //
+        po_box: uint, city //
+        per_pickup: true )
+
+        city = (
+        name: tstr, zip_code: uint
+        )"#;
+
+    let input = POBox {
+        po_box: 101,
+        name: "San Francisco".to_string(),
+        zip_code: 94103,
+    };
+    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    validate_cbor_cddl_named("address", cddl_input, &cbor_bytes).unwrap();
+
+    let input = StreetNumber {
+        street: "Eleventh St.".to_string(),
+        number: Some(375),
+        name: "San Francisco".to_string(),
+        zip_code: 94103,
+    };
+    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    validate_cbor_cddl_named("address", cddl_input, &cbor_bytes).unwrap();
+
+    let input = StreetNumber {
+        street: "Eleventh St.".to_string(),
+        number: None,
+        name: "San Francisco".to_string(),
+        zip_code: 94103,
+    };
+    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    validate_cbor_cddl_named("address", cddl_input, &cbor_bytes).unwrap();
+
+    let input = Pickup { per_pickup: true };
+    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    validate_cbor_cddl_named("address", cddl_input, &cbor_bytes).unwrap();
+}

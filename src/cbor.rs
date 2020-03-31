@@ -382,6 +382,20 @@ fn validate_map_member(member: &ArcNode, working_map: &mut WorkingMap) -> Valida
             // All group members validated Ok.
             Ok(())
         }
+        Node::Choice(c) => {
+            // We need to explore each of the possible choices.
+            // FIXME: need to checkpoint the WorkingMap before trying each
+            // option, because we may fail the choice and need to back out
+            // any changes.  Need a unit test to test this behavior.
+            // Recurse into each member of the group.
+            for option in &c.options {
+                if let Ok(()) = validate_map_member(option, working_map) {
+                    return Ok(());
+                }
+            }
+            // None of the choices worked.
+            make_oops("map choice failure")
+        }
         _ => panic!("unhandled map member {:?}", member),
     }
 }

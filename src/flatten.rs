@@ -318,6 +318,32 @@ fn flatten_vmke(vmke: &ast::ValueMemberKeyEntry) -> Node {
     occur_wrap(&vmke.occur, node)
 }
 
+// FIXME: it seems weird to me that cddl::ast::MemberKey::Value includes a
+// cddl::token::Value, when literals in other places are presented using
+// cddl::ast::Type2 .  Is that a deliberate choice, or a parser bug?
+fn translate_token_value(v: &cddl::token::Value) -> Node {
+    use cddl::token::Value;
+    match v {
+        Value::INT(i) => Node::Literal(Literal::Int(*i as i128)),
+        Value::UINT(u) => Node::Literal(Literal::Int(*u as i128)),
+        Value::FLOAT(f) => Node::Literal(Literal::Float(*f)),
+        Value::TEXT(s) => Node::Literal(Literal::Text(s.clone())),
+        Value::BYTE(b) => {
+            use cddl::token::ByteValue;
+            match b {
+                ByteValue::B16(encoded) => {
+                    // FIXME: return an error on bad hex decode.
+                    let bytes =
+                        hex::decode(encoded).unwrap_or_else(|e| panic!("bad hex literal: {}", e));
+                    Node::Literal(Literal::Bytes(bytes))
+                }
+                // FIXME: UTF8 and Base64 variants
+                _ => panic!("unhandled token::ByteValue"),
+            }
+        }
+    }
+}
+
 fn flatten_memberkey(memberkey: &ast::MemberKey) -> Node {
     use ast::MemberKey;
     match memberkey {
@@ -329,7 +355,7 @@ fn flatten_memberkey(memberkey: &ast::MemberKey) -> Node {
         }
         // FIXME: handle cut
         MemberKey::Type1 { t1, .. } => flatten_type1(t1.as_ref()),
-        _ => unimplemented!(),
+        MemberKey::Value { value, .. } => translate_token_value(value),
     }
 }
 
