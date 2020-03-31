@@ -173,6 +173,7 @@ fn flatten_typename(name: &str) -> Node {
         "uint" => Node::PreludeType(PreludeType::Uint),
         "float" => Node::PreludeType(PreludeType::Float),
         "tstr" => Node::PreludeType(PreludeType::Tstr),
+        "bstr" => Node::PreludeType(PreludeType::Bstr),
         // FIXME: lots more prelude types to handle...
         // FIXME: this could be a group name, maybe other things?
         _ => Node::Rule(Rule::new(name)),

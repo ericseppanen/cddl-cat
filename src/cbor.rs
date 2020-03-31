@@ -201,7 +201,8 @@ fn validate_prelude_type(ty: &PreludeType, value: &Value) -> ValidateResult {
         (PreludeType::Float, _) => make_oops("bad float"),
         (PreludeType::Tstr, Value::Text(_)) => Ok(()),
         (PreludeType::Tstr, _) => make_oops("bad tstr"),
-        _ => unimplemented!(),
+        (PreludeType::Bstr, Value::Bytes(_)) => Ok(()),
+        (PreludeType::Bstr, _) => make_oops("bad bstr"),
     }
 }
 

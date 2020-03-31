@@ -107,7 +107,6 @@ fn validate_cbor_textstring() {
 }
 
 #[test]
-#[ignore]
 fn validate_cbor_bytestring() {
     let cddl_input = r#"thing = bstr"#;
     validate_cbor_from_slice(cddl_input, cbor::BYTES_EMPTY).unwrap();
