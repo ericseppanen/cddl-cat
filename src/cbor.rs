@@ -261,7 +261,10 @@ fn validate_array_member(member: &ArcNode, working_array: &mut WorkingArray) -> 
             // through" KeyValue and Group nodes while remembering that we are
             // in an array context (with a particular working copy).
             // BUG: Choice nodes will have the same problem.
-            let next_node = &r.get_ref().unwrap();
+            let next_node = &r
+                .get_ref()
+                .unwrap_or_else(|| panic!("Rule {} lookup failed", r.name));
+
             validate_array_member(next_node, working_array)
         }
         Node::Group(g) => {
@@ -362,7 +365,9 @@ fn validate_map_member(member: &ArcNode, working_map: &mut WorkingMap) -> Valida
             //
             // So we can't use generic::validate() here.  We need to punch down
             // a level into the rule and match again.
-            let next_node = &r.get_ref().unwrap();
+            let next_node = &r
+                .get_ref()
+                .unwrap_or_else(|| panic!("Rule {} lookup failed", r.name));
             validate_map_member(next_node, working_map)
         }
         Node::Group(g) => {

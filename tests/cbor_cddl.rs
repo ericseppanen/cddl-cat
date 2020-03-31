@@ -188,14 +188,30 @@ fn validate_cbor_homogenous_array() {
 
 #[test]
 fn validate_cbor_array_groups() {
-    if false { // FIXME: broken
-        let cddl_input = r#"thing = [int, (int, int)]"#;
+    let cddl_input = r#"thing = [int, (int, int)]"#;
+    validate_cbor_from_slice(cddl_input, cbor::ARRAY_123).unwrap();
+
+    let cddl_input = r#"thing = [(int, int, int)]"#;
+    validate_cbor_from_slice(cddl_input, cbor::ARRAY_123).unwrap();
+
+    // FIXME broken
+    if false {
+        // Consume values in groups of one, an arbitrary number of times.
+        let cddl_input = r#"thing = [* (int)]"#;
+        validate_cbor_from_slice(cddl_input, cbor::ARRAY_EMPTY).unwrap();
         validate_cbor_from_slice(cddl_input, cbor::ARRAY_123).unwrap();
+
+        // Consume values in groups of three, an arbitrary number of times.
+        let cddl_input = r#"thing = [* (int, int, int)]"#;
+        validate_cbor_from_slice(cddl_input, cbor::ARRAY_EMPTY).unwrap();
+        validate_cbor_from_slice(cddl_input, cbor::ARRAY_123).unwrap();
+
+        // Consume values in groups of two, an arbitrary number of times.
+        let cddl_input = r#"thing = [* (int, int)]"#;
+        validate_cbor_from_slice(cddl_input, cbor::ARRAY_EMPTY).unwrap();
+        // Shouldn't match because three doesn't go into two evenly.
+        validate_cbor_from_slice(cddl_input, cbor::ARRAY_123).unwrap_err();
     }
-    // TODO: try splitting arrays into groups a few other ways:
-    // [(int, int, int)]
-    // [* (int)]
-    // [* (int, int)]
 
     let cddl_input = r#"thing = [a: int, b: int, bar] bar = (c: int)"#;
     validate_cbor_cddl_named("thing", cddl_input, cbor::ARRAY_123).unwrap();

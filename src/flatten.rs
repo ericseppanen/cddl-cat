@@ -56,7 +56,11 @@ where
         Node::Literal(_) => (),     // leaf node
         Node::PreludeType(_) => (), // leaf node
         Node::Rule(_) => (),        // leaf node
-        Node::Group(_) => (),       // leaf node
+        Node::Group(g) => {
+            for member in &g.members {
+                mutate_node_tree(member.as_ref(), func)?;
+            }
+        }
         Node::Choice(c) => {
             for option in &c.options {
                 mutate_node_tree(option.as_ref(), func)?;
@@ -129,9 +133,7 @@ fn flatten_typerule(typerule: &ast::TypeRule) -> (String, Node) {
 fn flatten_grouprule(grouprule: &ast::GroupRule) -> (String, Node) {
     // FIXME: handle generic_param
     // FIXME: handle is_type_choice_alternate
-    let kvs = flatten_groupentry(&grouprule.entry);
-
-    let node = Node::Group(Group { members: kvs });
+    let node = flatten_groupentry(&grouprule.entry);
     (grouprule.name.ident.clone(), node)
 }
 
@@ -197,30 +199,23 @@ fn flatten_group(group: &ast::Group) -> VecNode {
         .iter()
         .map(|ge_tuple| {
             let group_entry = &ge_tuple.0;
-            let mut kv_vec = flatten_groupentry(group_entry);
-            assert!(kv_vec.len() == 1);
-            // FIXME: this seems gross.  Not just the way it's written; the
-            // fact that we need to assume it's a vec of length 1.
-            let first: ArcNode = kv_vec.drain(..).next().unwrap();
-            first
+            Arc::new(flatten_groupentry(group_entry))
         })
         .collect();
     kvs
 }
 
-fn flatten_groupentry(group_entry: &ast::GroupEntry) -> VecNode {
+fn flatten_groupentry(group_entry: &ast::GroupEntry) -> Node {
     use ast::GroupEntry;
-    // FIXME: does this need different behavior for maps vs arrays(record or vector)?
-
-    // FIXME: this is awkward.  Sometimes we return a KeyValue vec of length 1,
-    // sometimes we return a vec containing a number of KeyValues.
 
     match group_entry {
-        GroupEntry::ValueMemberKey { ge, .. } => vec![Arc::new(flatten_vmke(ge))],
-        GroupEntry::TypeGroupname { ge, .. } => vec![Arc::new(flatten_tge(ge))],
-        GroupEntry::InlineGroup { group, .. } => {
-            // FIXME: handle occurrence
-            flatten_group(group)
+        GroupEntry::ValueMemberKey { ge, .. } => flatten_vmke(ge),
+        GroupEntry::TypeGroupname { ge, .. } => flatten_tge(ge),
+        GroupEntry::InlineGroup { group, occur, .. } => {
+            // FIXME: if nodes has len(1), just return a single node.
+            let nodes = flatten_group(group);
+            let node = Node::Group(Group { members: nodes });
+            occur_wrap(&occur, node)
         }
     }
 }
@@ -247,6 +242,21 @@ impl From<&ast::Occur> for OccurLimit {
     }
 }
 
+/// If the ast::Occur is Some, wrap the given Node in an ivt::Occur.
+///
+/// This is an adapter between the way the `ast` does occurences (extra
+/// metadata attached to certain data structures) and the way `ivt` does them
+/// (wrapping the Node in another Node).
+///
+/// If the occur argument is None, return the original node.
+///
+fn occur_wrap(occur: &Option<ast::Occur>, node: Node) -> Node {
+    match &occur {
+        Some(o) => Node::Occur(Occur::new(o.into(), node)),
+        None => node,
+    }
+}
+
 fn flatten_tge(tge: &ast::TypeGroupnameEntry) -> Node {
     // The incoming TypeGroupnameEntry can mean multiple things.  It carries
     // an Identifier, which could refer to:
@@ -257,10 +267,7 @@ fn flatten_tge(tge: &ast::TypeGroupnameEntry) -> Node {
     // FIXME: handle generic_arg
 
     let node = flatten_typename(&tge.name.ident);
-    match &tge.occur {
-        Some(o) => Node::Occur(Occur::new(o.into(), node)),
-        None => node,
-    }
+    occur_wrap(&tge.occur, node)
 }
 
 fn flatten_vmke(vmke: &ast::ValueMemberKeyEntry) -> Node {
@@ -268,10 +275,7 @@ fn flatten_vmke(vmke: &ast::ValueMemberKeyEntry) -> Node {
     let key = flatten_memberkey(&member_key);
     let value = flatten_type(&vmke.entry_type);
     let node = Node::KeyValue(KeyValue::new(key, value));
-    match &vmke.occur {
-        Some(o) => Node::Occur(Occur::new(o.into(), node)),
-        None => node,
-    }
+    occur_wrap(&vmke.occur, node)
 }
 
 fn flatten_memberkey(memberkey: &ast::MemberKey) -> Node {
