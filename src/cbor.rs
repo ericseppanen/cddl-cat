@@ -249,6 +249,7 @@ fn validate_array_member(member: &ArcNode, working_array: &mut WorkingArray) -> 
     match member.as_ref() {
         // FIXME: does it make sense for this to destructure & dispatch
         // each Node type here?  Is there any way to make this generic?
+        Node::Occur(o) => validate_array_occur(o, working_array),
         Node::KeyValue(kv) => {
             // The key is ignored.  Validate the value only.
             // FIXME: should we try to use the key to provide a more
@@ -278,42 +279,41 @@ fn validate_array_member(member: &ArcNode, working_array: &mut WorkingArray) -> 
     }
 }
 
-/// Validate a key-value pair against a mutable working array.
-fn validate_array_value(node: &Node, working_array: &mut WorkingArray) -> ValidateResult {
+/// Validate an occurrence against a mutable working array.
+// FIXME: this is pretty similar to validate_map_occur; maybe they can be combined?
+fn validate_array_occur(occur: &Occur, working_map: &mut WorkingArray) -> ValidateResult {
+    let (lower_limit, upper_limit) = occur.limits();
     let mut count: usize = 0;
 
-    // FIXME: oops, we were previously consuming occur from the KeyValue type.
-    // We need to plumb that through somehow.
-    let upper_limit = 1;
-    let lower_limit = 1;
-
     loop {
-        // Try to match this node against the head of the working array.
-        // A successful match has the side-effect of removing that value from
-        // the working array.
-        // If we fail to validate a node, exit now with an error.
-
-        match working_array.array.borrow().front() {
-            Some(val) => match val.validate(node) {
-                Ok(_) => (),
-                Err(_) => break,
-            },
-            None => break,
+        match validate_array_value(&occur.node, working_map) {
+            Ok(_) => (),
+            Err(_) => break,
         }
-
-        // We had a successful match; remove the matched value.
-        working_array.array.borrow_mut().pop_front();
         count += 1;
-
         if count >= upper_limit {
             // Stop matching; we've consumed the maximum number of this key.
             break;
         }
     }
     if count < lower_limit {
-        return make_oops(&format!("failure to find array value"));
+        return make_oops(&format!("failure to find array member"));
     }
     Ok(())
+}
+
+/// Validate a key-value pair against a mutable working array.
+fn validate_array_value(node: &Node, working_array: &mut WorkingArray) -> ValidateResult {
+    let mut working = working_array.array.borrow_mut();
+    match working.front() {
+        Some(val) => {
+            val.validate(node)?;
+            // We had a successful match; remove the matched value.
+            working.pop_front();
+            Ok(())
+        }
+        None => make_oops("failed to find array member"),
+    }
 }
 
 fn validate_map(m: &Map, value: &Value) -> ValidateResult {
@@ -401,7 +401,6 @@ fn validate_map_occur(occur: &Occur, working_map: &mut WorkingMap) -> ValidateRe
     }
     Ok(())
 }
-
 
 /// Validate a key-value pair against a mutable working map.
 fn validate_map_keyvalue(kv: &KeyValue, working_map: &mut WorkingMap) -> ValidateResult {

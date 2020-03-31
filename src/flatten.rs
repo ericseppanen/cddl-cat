@@ -248,28 +248,19 @@ impl From<&ast::Occur> for OccurLimit {
 }
 
 fn flatten_tge(tge: &ast::TypeGroupnameEntry) -> Node {
-    // This is a tricky one.
     // The incoming TypeGroupnameEntry can mean multiple things.  It carries
     // an Identifier, which could refer to:
     // - a prelude type
     // - a user-defined type rule
     // - a user-defined group
-    //
-    // It's awkward that we are currently returning KeyValue, because it's
-    // clear that we want to sometimes emit a generic "ref by name" node,
-    // or Literal/Prelude nodes.
-    // Perhaps KeyValue should itself be a Node?
-    // Perhaps there should be a secondary Node type like MemberNode which
-    // can only contain KeyValue or NameRef?
-    // I think that the former is correct: KeyValue should be a Node.
-    //                                     -------------------------
 
     // FIXME: handle generic_arg
 
-    // FIXME: handle occurrences
-    //let occur = Occur::from(&tge.occur);
-
-    flatten_typename(&tge.name.ident)
+    let node = flatten_typename(&tge.name.ident);
+    match &tge.occur {
+        Some(o) => Node::Occur(Occur::new(o.into(), node)),
+        None => node,
+    }
 }
 
 fn flatten_vmke(vmke: &ast::ValueMemberKeyEntry) -> Node {

@@ -164,7 +164,6 @@ fn validate_cbor_group() {
 }
 
 #[test]
-#[ignore]
 fn validate_cbor_homogenous_array() {
     let cddl_input = r#"thing = [* int]"#; // zero or more
     validate_cbor_from_slice(cddl_input, cbor::ARRAY_EMPTY).unwrap();
