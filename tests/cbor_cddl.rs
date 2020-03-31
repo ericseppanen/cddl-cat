@@ -266,13 +266,11 @@ fn validate_cbor_array_record() {
     let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
     validate_cbor_from_slice(cddl_input, &cbor_bytes).unwrap_err();
 
-    if false { // FIXME: need float support
-        let cddl_input = r#"thing = [a: tstr, b: uint, c: float, d: bool]"#;
+    let cddl_input = r#"thing = [a: tstr, b: uint, c: float, d: bool]"#;
 
-        let input = KitchenSink("xyz".to_string(), 17, 9.9, false);
-        let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
-        validate_cbor_from_slice(cddl_input, &cbor_bytes).unwrap();
-    }
+    let input = KitchenSink("xyz".to_string(), 17, 9.9, false);
+    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    validate_cbor_from_slice(cddl_input, &cbor_bytes).unwrap();
 
     // FIXME: there isn't any way at present to serialize a struct
     // into a CBOR array. See https://github.com/pyfisch/cbor/issues/107
