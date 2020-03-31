@@ -174,23 +174,38 @@ pub struct Group {
     pub members: VecNode,
 }
 
-/// An array with "record" semantics: a list of types in a specific order.
+/// An array is a list of types in a specific order.
 ///
-/// It has similar semantics to a rust tuple, though it could also be used
-/// to serialize a struct.
-/// It contains key-value pairs, but the keys are solely for debugging;
-/// they are ignored for validation purposes.
+/// Arrays are expected to take the form of "records" or "vectors".
+///
+/// A "vector" array is expected to have an arbitrary-length list of a single
+/// type, e.g. zero-or-more integers:
+/// ```text
+/// [ * int ]
+/// ```
+/// The type in a vector could be something complex, like a group, choice, or
+/// another array or map.
+///
+/// A "record" array is a sequence of different values, each with a specific
+/// type.  It has similar semantics to a rust tuple, though it could also
+/// theoretically be used to serialize a struct.
+///
+/// CDDL syntax allows certain nonsensical or ambiguous arrays, for example:
+/// ```text
+/// thing = [ * mygroup ]
+/// mygroup = ( a = tstr, b = int)
+/// ```
+/// or
+/// ```text
+/// thing = [ * "a" = int, * "b" = int ]
+/// ```
+///
+/// CDDL arrays may be composed of key-value pairs, but the keys are solely
+/// for information/debugging; they are ignored for validation purposes.
+///
 #[derive(Debug, Clone)]
-pub struct ArrayRecord {
+pub struct Array {
     pub members: VecNode,
-}
-
-/// An array with "vector" semantics: a homogenous list of elements, all of the
-/// same type.
-#[derive(Debug, Clone)]
-pub struct ArrayVec {
-    // TODO: handle occurrences
-    pub element: ArcNode,
 }
 
 /// Any node in the Intermediate Validation Tree.
@@ -201,8 +216,7 @@ pub enum Node {
     Rule(Rule), // FIXME: NameRef
     Choice(Choice),
     Map(Map),
-    ArrayRecord(ArrayRecord),
-    ArrayVec(ArrayVec),
+    Array(Array),
     Group(Group), // FIXME: NameRef
     KeyValue(KeyValue),
 }

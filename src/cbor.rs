@@ -99,8 +99,7 @@ impl Validate<()> for Value {
             Node::PreludeType(p) => validate_prelude_type(p, value),
             Node::Choice(c) => generic::validate_choice(c, value),
             Node::Map(m) => validate_map(m, value),
-            Node::ArrayRecord(a) => validate_array(a, value),
-            Node::ArrayVec(_) => unimplemented!(),
+            Node::Array(a) => validate_array(a, value),
             Node::Rule(r) => generic::validate_rule(r, value),
             Node::Group(g) => {
                 panic!("validate group {:?}", g);
@@ -206,14 +205,14 @@ fn validate_prelude_type(ty: &PreludeType, value: &Value) -> ValidateResult {
 }
 
 // FIXME: should this be combined with Map handling?
-fn validate_array(ar: &ArrayRecord, value: &Value) -> ValidateResult {
+fn validate_array(ar: &Array, value: &Value) -> ValidateResult {
     match value {
         Value::Array(a) => validate_array_part2(ar, a),
         _ => make_oops("expected array, found not-array"),
     }
 }
 
-fn validate_array_part2(ar: &ArrayRecord, value_array: &Vec<Value>) -> ValidateResult {
+fn validate_array_part2(ar: &Array, value_array: &Vec<Value>) -> ValidateResult {
     // Strategy for validating an array:
     // 1. We assume that the code that constructed the IVT Array placed the
     //    members in matching order (literals first, more general types at the

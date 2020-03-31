@@ -71,13 +71,11 @@ where
             mutate_node_tree(kv.key.as_ref(), func)?;
             mutate_node_tree(kv.value.as_ref(), func)?;
         }
-        Node::ArrayRecord(a) => {
+        Node::Array(a) => {
             for member in &a.members {
                 mutate_node_tree(member.as_ref(), func)?;
             }
         }
-        //Node::ArrayVec(a) => ___,
-        _ => panic!("mutate_node_tree hit {:?}", node),
     }
     Ok(())
 }
@@ -183,7 +181,7 @@ fn flatten_map(group: &ast::Group) -> Node {
 /// Flatten a group into a Map.
 fn flatten_array(group: &ast::Group) -> Node {
     let kvs = flatten_group(group);
-    Node::ArrayRecord(ArrayRecord { members: kvs })
+    Node::Array(Array { members: kvs })
 }
 
 // FIXME: special handling for GroupRule vs Map vs Array?
