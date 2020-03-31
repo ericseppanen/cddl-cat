@@ -26,6 +26,7 @@ pub enum PreludeType {
     Bool,
     Int,
     Uint,
+    Float,
     Tstr,
     Bstr,
 }

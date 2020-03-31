@@ -43,7 +43,6 @@ fn validate_cbor_bool() {
 }
 
 #[test]
-#[ignore]
 fn validate_cbor_float() {
     let cddl_input = r#"thing = 0.0"#;
     validate_cbor_from_slice(cddl_input, cbor::FLOAT_0_0).unwrap();
@@ -54,21 +53,23 @@ fn validate_cbor_float() {
     validate_cbor_from_slice(cddl_input, cbor::FLOAT_1E5).unwrap();
     validate_cbor_from_slice(cddl_input, cbor::FLOAT_1E300).unwrap();
 
-    let cddl_input = r#"thing = float16"#;
-    validate_cbor_from_slice(cddl_input, cbor::FLOAT_1_0).unwrap();
+    if false {
+        // FIXME: no support yet for float16/32/64.
+        let cddl_input = r#"thing = float16"#;
+        validate_cbor_from_slice(cddl_input, cbor::FLOAT_1_0).unwrap();
 
-    // "Too small" floats should not cause a validation error.
-    // "Canonical CBOR" suggests that floats should be shrunk to the smallest
-    // size that can represent the value.  So 1.0 can be stored in 16 bits,
-    // even if the CDDL specifies float64.
-    let cddl_input = r#"thing = float32"#;
-    validate_cbor_from_slice(cddl_input, cbor::FLOAT_1_0).unwrap();
-    validate_cbor_from_slice(cddl_input, cbor::FLOAT_1E5).unwrap();
+        // "Too small" floats should not cause a validation error.
+        // "Canonical CBOR" suggests that floats should be shrunk to the smallest
+        // size that can represent the value.  So 1.0 can be stored in 16 bits,
+        // even if the CDDL specifies float64.
+        let cddl_input = r#"thing = float32"#;
+        validate_cbor_from_slice(cddl_input, cbor::FLOAT_1_0).unwrap();
+        validate_cbor_from_slice(cddl_input, cbor::FLOAT_1E5).unwrap();
 
-    let cddl_input = r#"thing = float64"#;
-    validate_cbor_from_slice(cddl_input, cbor::FLOAT_1_0).unwrap();
-    validate_cbor_from_slice(cddl_input, cbor::FLOAT_1E300).unwrap();
-
+        let cddl_input = r#"thing = float64"#;
+        validate_cbor_from_slice(cddl_input, cbor::FLOAT_1_0).unwrap();
+        validate_cbor_from_slice(cddl_input, cbor::FLOAT_1E300).unwrap();
+    }
     // TODO: check that large floats don't validate against a smaller size.
     // E.g. CBOR #7.27 (64-bit) shouldn't validate against "float16" or "float32".
 }

@@ -155,6 +155,7 @@ fn flatten_type2(ty2: &ast::Type2) -> Node {
         // FIXME: this casting is gross.
         Type2::UintValue { value, .. } => Node::Literal(Literal::Int(*value as i128)),
         Type2::TextValue { value, .. } => Node::Literal(Literal::Text(value.clone())),
+        Type2::FloatValue { value, .. } => Node::Literal(Literal::Float(*value)),
         Type2::Typename { ident, .. } => flatten_typename(&ident.ident),
         Type2::Map { group, .. } => flatten_map(&group),
         Type2::Array { group, .. } => flatten_array(&group),
@@ -170,6 +171,7 @@ fn flatten_typename(name: &str) -> Node {
         "true" => Node::Literal(Literal::Bool(true)),
         "int" => Node::PreludeType(PreludeType::Int),
         "uint" => Node::PreludeType(PreludeType::Uint),
+        "float" => Node::PreludeType(PreludeType::Float),
         "tstr" => Node::PreludeType(PreludeType::Tstr),
         // FIXME: lots more prelude types to handle...
         // FIXME: this could be a group name, maybe other things?
