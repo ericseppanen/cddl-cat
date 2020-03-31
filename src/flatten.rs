@@ -17,9 +17,9 @@
 
 use crate::ivt::*;
 use crate::util::ValidateError;
-use hex;
 use cddl::ast::{self, CDDL};
 use cddl::parser::cddl_from_str;
+use hex;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -139,19 +139,19 @@ fn flatten_grouprule(grouprule: &ast::GroupRule) -> (String, Node) {
 }
 
 fn flatten_type(ty: &ast::Type) -> Node {
-    let mut options: Vec<Node> = ty.type_choices.iter().map(|type1| {
-        flatten_type1(type1)
-    }).collect();
+    let mut options: Vec<Node> = ty
+        .type_choices
+        .iter()
+        .map(|type1| flatten_type1(type1))
+        .collect();
 
     match options.len() {
         0 => panic!("flatten type with 0 options"),
-        1 => options.drain(..).next().unwrap(),  // FIXME: awkward
+        1 => options.drain(..).next().unwrap(), // FIXME: awkward
         _ => {
             // FIXME: these gymnastics around Arc<Node> vs Node need to go away.
-            let arced: VecNode = options.drain(..).map(|op| {
-                Arc::new(op)
-            }).collect();
-            Node::Choice(Choice{options: arced})
+            let arced: VecNode = options.drain(..).map(|op| Arc::new(op)).collect();
+            Node::Choice(Choice { options: arced })
         }
     }
 }
@@ -175,12 +175,10 @@ fn flatten_type2(ty2: &ast::Type2) -> Node {
             // FIXME: need to return a Result from this function;
             // panicking is not a good strategy.
             // Maybe this belongs in the CDDL parser instead?
-            let bytes = hex::decode(value).unwrap_or_else(|e| {
-                panic!("bad hex literal: {}", e)
-            });
+            let bytes = hex::decode(value).unwrap_or_else(|e| panic!("bad hex literal: {}", e));
             Node::Literal(Literal::Bytes(bytes))
         }
-        Type2::ParenthesizedType { pt, ..} => flatten_type(pt),
+        Type2::ParenthesizedType { pt, .. } => flatten_type(pt),
         _ => panic!("flatten_type2 unimplemented {:#?}", ty2),
     }
 }
@@ -221,11 +219,17 @@ fn flatten_group(group: &ast::Group) -> VecNode {
         flatten_groupchoice(groupchoice)
     } else {
         // Emit a Choice node, containing a vector of Group nodes.
-        let options: VecNode = group.group_choices.iter().map(|gc| {
-            let inner_members = flatten_groupchoice(gc);
-            Arc::new(Node::Group(Group{members: inner_members}))
-        }).collect();
-        vec![Arc::new(Node::Choice(Choice{options}))]
+        let options: VecNode = group
+            .group_choices
+            .iter()
+            .map(|gc| {
+                let inner_members = flatten_groupchoice(gc);
+                Arc::new(Node::Group(Group {
+                    members: inner_members,
+                }))
+            })
+            .collect();
+        vec![Arc::new(Node::Choice(Choice { options }))]
     }
 }
 
