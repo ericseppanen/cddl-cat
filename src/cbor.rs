@@ -9,11 +9,18 @@ use crate::util::*;
 use serde_cbor::Value;
 use std::cell::RefCell;
 use std::collections::BTreeMap; // used in serde_cbor Value::Map
+use std::collections::VecDeque;
 
 type ValueMap = BTreeMap<Value, Value>;
 
 /// This struct allows us to maintain a map that is consumed during validation.
 struct WorkingMap {
+    // This only uses RefCell because Rust doesn't allow traits to be generic
+    // over mutable-ness.  We want to implement the Validate trait on this
+    // struct, but we know it's going to be mutable.  So instead of having
+    // a separate ValidateMut trait we accept that this struct will always
+    // be treated as immutable and we use interior mutability to actually
+    // change things.
     map: RefCell<ValueMap>,
 }
 
@@ -22,6 +29,22 @@ impl WorkingMap {
     fn new(value_map: &ValueMap) -> WorkingMap {
         WorkingMap {
             map: RefCell::new(value_map.clone()),
+        }
+    }
+}
+
+/// This struct allows us to maintain a copy of an array that is consumed
+/// during validation.
+struct WorkingArray {
+    array: RefCell<VecDeque<Value>>,
+}
+
+impl WorkingArray {
+    /// Makes a copy of an existing map's table.
+    fn new(array: &Vec<Value>) -> WorkingArray {
+        let deque: VecDeque<Value> = array.iter().cloned().collect();
+        WorkingArray {
+            array: RefCell::new(deque),
         }
     }
 }
@@ -76,7 +99,7 @@ impl Validate<()> for Value {
             Node::PreludeType(p) => validate_prelude_type(p, value),
             Node::Choice(c) => generic::validate_choice(c, value),
             Node::Map(m) => validate_map(m, value),
-            Node::ArrayRecord(_) => unimplemented!(),
+            Node::ArrayRecord(a) => validate_array(a, value),
             Node::ArrayVec(_) => unimplemented!(),
             Node::Rule(r) => generic::validate_rule(r, value),
             Node::Group(g) => {
@@ -182,6 +205,116 @@ fn validate_prelude_type(ty: &PreludeType, value: &Value) -> ValidateResult {
     }
 }
 
+// FIXME: should this be combined with Map handling?
+fn validate_array(ar: &ArrayRecord, value: &Value) -> ValidateResult {
+    match value {
+        Value::Array(a) => validate_array_part2(ar, a),
+        _ => make_oops("expected array, found not-array"),
+    }
+}
+
+fn validate_array_part2(ar: &ArrayRecord, value_array: &Vec<Value>) -> ValidateResult {
+    // Strategy for validating an array:
+    // 1. We assume that the code that constructed the IVT Array placed the
+    //    members in matching order (literals first, more general types at the
+    //    end) so that we consume IVT Array members in order without worrying
+    //    about non-deterministic results.
+    // 2. Make a mutable working copy of the Value::Array contents
+    // 3. Iterate over the IVT Array, searching the working copy for a
+    //    matching key.
+    // 4. If a match is found, remove the value from our working copy.
+    // 6. If the IVT member can consume multiple values, repeat the search for
+    //    this key.
+    // 7. If a match is not found and the member is optional (or we've already
+    //    consumed an acceptable number of keys), continue to the next IVT
+    //    member.
+    // 8. If the member is not found and we haven't consumed the expected
+    //    number of values, return an error.
+
+    let mut working_array = WorkingArray::new(value_array);
+
+    for member in &ar.members {
+        validate_array_member(member, &mut working_array)?;
+    }
+    if working_array.array.into_inner().is_empty() {
+        Ok(())
+    } else {
+        // If the working map isn't empty, that means we had some extra values
+        // that didn't match anything.
+        make_oops("dangling array values")
+    }
+}
+
+fn validate_array_member(member: &ArcNode, working_array: &mut WorkingArray) -> ValidateResult {
+    match member.as_ref() {
+        // FIXME: does it make sense for this to destructure & dispatch
+        // each Node type here?  Is there any way to make this generic?
+        Node::KeyValue(kv) => {
+            // The key is ignored.  Validate the value only.
+            // FIXME: should we try to use the key to provide a more
+            // useful error message?
+            validate_array_value(&kv.value, working_array)
+        }
+        Node::Rule(r) => {
+            // FIXME: This seems like a gross hack.  We need to dereference
+            // the rule here, because if we drop to the bottom and call
+            // validate_array_value() then we lose our ability to "see
+            // through" KeyValue and Group nodes while remembering that we are
+            // in an array context (with a particular working copy).
+            // BUG: Choice nodes will have the same problem.
+            let next_node = &r.get_ref().unwrap();
+            validate_array_member(next_node, working_array)
+        }
+        Node::Group(g) => {
+            // Recurse into each member of the group.
+            for group_member in &g.members {
+                // Exit early if we hit an error.
+                validate_array_member(group_member, working_array)?;
+            }
+            // All group members validated Ok.
+            Ok(())
+        }
+        m => validate_array_value(m, working_array),
+    }
+}
+
+/// Validate a key-value pair against a mutable working array.
+fn validate_array_value(node: &Node, working_array: &mut WorkingArray) -> ValidateResult {
+    let mut count: usize = 0;
+
+    // FIXME: oops, we were previously consuming occur from the KeyValue type.
+    // We need to plumb that through somehow.
+    let occur = Occur { lower: 1, upper: 1 };
+
+    loop {
+        // Try to match this node against the head of the working array.
+        // A successful match has the side-effect of removing that value from
+        // the working array.
+        // If we fail to validate a node, exit now with an error.
+
+        match working_array.array.borrow().front() {
+            Some(val) => match val.validate(node) {
+                Ok(_) => (),
+                Err(_) => break,
+            },
+            None => break,
+        }
+
+        // We had a successful match; remove the matched value.
+        working_array.array.borrow_mut().pop_front();
+        count += 1;
+
+        if count >= occur.upper {
+            // Stop matching; we've consumed the maximum number of this key.
+            break;
+        }
+    }
+    if count < occur.lower {
+        return make_oops(&format!("failure to find array value"));
+    }
+    Ok(())
+}
+
 fn validate_map(m: &Map, value: &Value) -> ValidateResult {
     match value {
         Value::Map(vm) => validate_map_part2(m, vm),
@@ -192,8 +325,8 @@ fn validate_map(m: &Map, value: &Value) -> ValidateResult {
 fn validate_map_part2(m: &Map, value_map: &ValueMap) -> ValidateResult {
     // Strategy for validating a map:
     // 1. We assume that the code that constructed the IVT Map placed the keys
-    //    in matching order (specific heads first, more general types at the end)
-    //    so that we consume IVT Map keys in order without worrying about non-
+    //    in matching order (literals first, more general types at the end) so
+    //    that we consume IVT Map keys in order without worrying about non-
     //    deterministic results.
     // 2. Make a mutable working copy of the Value::Map contents
     // 3. Iterate over the IVT Map, searching the Value::Map for a matching key.

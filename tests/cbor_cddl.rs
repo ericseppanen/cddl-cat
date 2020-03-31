@@ -188,20 +188,40 @@ fn validate_cbor_homogenous_array() {
 }
 
 #[test]
-#[ignore] // FIXME: broken
 fn validate_cbor_array_groups() {
-    let cddl_input = r#"thing = [int, (int, int)]"#;
-    validate_cbor_from_slice(cddl_input, cbor::ARRAY_123).unwrap();
+    if false { // FIXME: broken
+        let cddl_input = r#"thing = [int, (int, int)]"#;
+        validate_cbor_from_slice(cddl_input, cbor::ARRAY_123).unwrap();
+    }
     // TODO: try splitting arrays into groups a few other ways:
     // [(int, int, int)]
     // [* (int)]
     // [* (int, int)]
+
+    let cddl_input = r#"thing = [a: int, b: int, bar] bar = (c: int)"#;
+    validate_cbor_cddl_named("thing", cddl_input, cbor::ARRAY_123).unwrap();
+
+    let cddl_input = r#"thing = [a: int, (bar)] bar = (b: int, c: int)"#;
+    validate_cbor_cddl_named("thing", cddl_input, cbor::ARRAY_123).unwrap();
+
+    if false { // FIXME: panics instead of returning an error.
+        // This is incorrectly constructed, because this is a key-value with
+        // a group name where the value should be.
+        let cddl_input = r#"thing = [a: int, b: bar] bar = (b: int, c: int)"#;
+        validate_cbor_cddl_named("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    }
 }
 
 #[test]
-#[ignore]
 fn validate_cbor_array_record() {
     let cddl_input = r#"thing = [a: int, b: int, c: int]"#;
+    validate_cbor_from_slice(cddl_input, cbor::ARRAY_123).unwrap();
+    validate_cbor_from_slice(cddl_input, cbor::ARRAY_EMPTY).unwrap_err();
+
+    let cddl_input = r#"thing = [a: int, b: int, c: foo] foo = int"#;
+    validate_cbor_cddl_named("thing", cddl_input, cbor::ARRAY_123).unwrap();
+
+    let cddl_input = r#"thing = [int, int, int]"#;
     validate_cbor_from_slice(cddl_input, cbor::ARRAY_123).unwrap();
     validate_cbor_from_slice(cddl_input, cbor::ARRAY_EMPTY).unwrap_err();
 
@@ -223,11 +243,13 @@ fn validate_cbor_array_record() {
     let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
     validate_cbor_from_slice(cddl_input, &cbor_bytes).unwrap_err();
 
-    let cddl_input = r#"thing = [a: tstr, b: uint, c: float32, d: bool]"#;
+    if false { // FIXME: need float support
+        let cddl_input = r#"thing = [a: tstr, b: uint, c: float, d: bool]"#;
 
-    let input = KitchenSink("xyz".to_string(), 17, 9.9, false);
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
-    validate_cbor_from_slice(cddl_input, &cbor_bytes).unwrap();
+        let input = KitchenSink("xyz".to_string(), 17, 9.9, false);
+        let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+        validate_cbor_from_slice(cddl_input, &cbor_bytes).unwrap();
+    }
 
     // FIXME: there isn't any way at present to serialize a struct
     // into a CBOR array. See https://github.com/pyfisch/cbor/issues/107

@@ -71,11 +71,13 @@ where
             mutate_node_tree(kv.key.as_ref(), func)?;
             mutate_node_tree(kv.value.as_ref(), func)?;
         }
-        //Node::ArrayRecord(a) => ___,
-        //Node::ArrayVec(a) => ___,
-        _ => {
-            panic!("mutate_node_tree hit {:?}", node)
+        Node::ArrayRecord(a) => {
+            for member in &a.members {
+                mutate_node_tree(member.as_ref(), func)?;
+            }
         }
+        //Node::ArrayVec(a) => ___,
+        _ => panic!("mutate_node_tree hit {:?}", node),
     }
     Ok(())
 }
@@ -152,6 +154,7 @@ fn flatten_type2(ty2: &ast::Type2) -> Node {
         Type2::TextValue { value, .. } => Node::Literal(Literal::Text(value.clone())),
         Type2::Typename { ident, .. } => flatten_typename(&ident.ident),
         Type2::Map { group, .. } => flatten_map(&group),
+        Type2::Array { group, .. } => flatten_array(&group),
         _ => unimplemented!(),
     }
 }
@@ -175,6 +178,12 @@ fn flatten_typename(name: &str) -> Node {
 fn flatten_map(group: &ast::Group) -> Node {
     let kvs = flatten_group(group);
     Node::Map(Map { members: kvs })
+}
+
+/// Flatten a group into a Map.
+fn flatten_array(group: &ast::Group) -> Node {
+    let kvs = flatten_group(group);
+    Node::ArrayRecord(ArrayRecord { members: kvs })
 }
 
 // FIXME: special handling for GroupRule vs Map vs Array?

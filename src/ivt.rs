@@ -182,7 +182,7 @@ pub struct Group {
 /// they are ignored for validation purposes.
 #[derive(Debug, Clone)]
 pub struct ArrayRecord {
-    pub elements: VecNode,
+    pub members: VecNode,
 }
 
 /// An array with "vector" semantics: a homogenous list of elements, all of the
