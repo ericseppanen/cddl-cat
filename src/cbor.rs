@@ -129,6 +129,7 @@ impl From<&Literal> for Value {
             Literal::Int(i) => Value::Integer(*i),
             Literal::Float(f) => Value::Float(*f),
             Literal::Text(t) => Value::Text(t.clone()),
+            Literal::Bytes(b) => Value::Bytes(b.clone()),
         }
     }
 }

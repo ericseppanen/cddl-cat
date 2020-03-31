@@ -17,6 +17,7 @@
 
 use crate::ivt::*;
 use crate::util::ValidateError;
+use hex;
 use cddl::ast::{self, CDDL};
 use cddl::parser::cddl_from_str;
 use std::collections::BTreeMap;
@@ -159,6 +160,15 @@ fn flatten_type2(ty2: &ast::Type2) -> Node {
         Type2::Typename { ident, .. } => flatten_typename(&ident.ident),
         Type2::Map { group, .. } => flatten_map(&group),
         Type2::Array { group, .. } => flatten_array(&group),
+        Type2::B16ByteString { value, .. } => {
+            // FIXME: need to return a Result from this function;
+            // panicking is not a good strategy.
+            // Maybe this belongs in the CDDL parser instead?
+            let bytes = hex::decode(value).unwrap_or_else(|e| {
+                panic!("bad hex literal: {}", e)
+            });
+            Node::Literal(Literal::Bytes(bytes))
+        }
         _ => unimplemented!(),
     }
 }

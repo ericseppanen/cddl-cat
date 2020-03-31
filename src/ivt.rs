@@ -38,7 +38,8 @@ pub enum Literal {
     Int(i128),
     Float(f64),
     Text(String),
-    // TODO: byte string literals, nil?
+    Bytes(Vec<u8>),
+    // TODO: nil?
 }
 
 /// A rule reference, with interior mutability.

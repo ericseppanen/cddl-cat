@@ -113,6 +113,9 @@ fn validate_cbor_bytestring() {
     validate_cbor_from_slice(cddl_input, cbor::BYTES_1234).unwrap();
     validate_cbor_from_slice(cddl_input, cbor::TEXT_EMPTY).unwrap_err();
     validate_cbor_from_slice(cddl_input, cbor::ARRAY_123).unwrap_err();
+
+    let cddl_input = r#"thing = h'01020304'"#;
+    validate_cbor_from_slice(cddl_input, cbor::BYTES_1234).unwrap();
 }
 
 #[test]
