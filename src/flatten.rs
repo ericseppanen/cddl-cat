@@ -76,6 +76,9 @@ where
                 mutate_node_tree(member.as_ref(), func)?;
             }
         }
+        Node::Occur(o) => {
+            mutate_node_tree(o.node.as_ref(), func)?;
+        }
     }
     Ok(())
 }
@@ -222,26 +225,23 @@ fn flatten_groupentry(group_entry: &ast::GroupEntry) -> VecNode {
     }
 }
 
-// FIXME: this was a fun idea, but the implementation is kind of annoying.
-// I think I'd rather go back to the AST-style enum instead of this
-// confusing numeric system.
-impl From<&Option<ast::Occur>> for Occur {
-    fn from(occur: &Option<ast::Occur>) -> Occur {
+/// Convert ast::Occur to ivt::OccurLimit
+impl From<&ast::Occur> for OccurLimit {
+    fn from(occur: &ast::Occur) -> OccurLimit {
         match occur {
-            None => Occur { lower: 1, upper: 1 },
-            Some(ast::Occur::Optional(_)) => Occur { lower: 0, upper: 1 },
-            Some(ast::Occur::ZeroOrMore(_)) => Occur {
-                lower: 0,
-                upper: usize::MAX,
-            },
-            Some(ast::Occur::OneOrMore(_)) => Occur {
-                lower: 1,
-                upper: usize::MAX,
-            },
-            Some(ast::Occur::Exact { lower, upper, .. }) => {
-                let lower = lower.unwrap_or(0);
-                let upper = upper.unwrap_or(usize::MAX);
-                Occur { lower, upper }
+            ast::Occur::Optional(_) => OccurLimit::Optional,
+            ast::Occur::ZeroOrMore(_) => OccurLimit::ZeroOrMore,
+            ast::Occur::OneOrMore(_) => OccurLimit::OneOrMore,
+            ast::Occur::Exact { lower, upper, .. } => {
+                let lower: usize = match lower {
+                    Some(n) => *n,
+                    None => 0,
+                };
+                let upper: usize = match upper {
+                    Some(n) => *n,
+                    None => usize::MAX,
+                };
+                OccurLimit::Numbered(lower, upper)
             }
         }
     }
@@ -273,11 +273,14 @@ fn flatten_tge(tge: &ast::TypeGroupnameEntry) -> Node {
 }
 
 fn flatten_vmke(vmke: &ast::ValueMemberKeyEntry) -> Node {
-    let occur = Occur::from(&vmke.occur);
     let member_key = vmke.member_key.as_ref().unwrap(); // FIXME: may be None for arrays
     let key = flatten_memberkey(&member_key);
     let value = flatten_type(&vmke.entry_type);
-    Node::KeyValue(KeyValue::new(key, value, occur))
+    let node = Node::KeyValue(KeyValue::new(key, value));
+    match &vmke.occur {
+        Some(o) => Node::Occur(Occur::new(o.into(), node)),
+        None => node,
+    }
 }
 
 fn flatten_memberkey(memberkey: &ast::MemberKey) -> Node {

@@ -72,8 +72,7 @@ fn validate_map() {
             let key = Node::Literal(Literal::Text(key.to_string()));
             let value = kv.1;
             let value = Node::PreludeType(value);
-            let occur = Occur { lower: 1, upper: 1 };
-            Arc::new(Node::KeyValue(KeyValue::new(key, value, occur)))
+            Arc::new(Node::KeyValue(KeyValue::new(key, value)))
         })
         .collect();
     let node = &Node::Map(Map { members: kv_vec });

@@ -105,6 +105,7 @@ impl Validate<()> for Value {
                 panic!("validate group {:?}", g);
             }
             Node::KeyValue(_) => unimplemented!(), // FIXME: can this even happen?
+            Node::Occur(_) => panic!("reached Occur outside of array/map context"),
         }
     }
 }
@@ -283,7 +284,8 @@ fn validate_array_value(node: &Node, working_array: &mut WorkingArray) -> Valida
 
     // FIXME: oops, we were previously consuming occur from the KeyValue type.
     // We need to plumb that through somehow.
-    let occur = Occur { lower: 1, upper: 1 };
+    let upper_limit = 1;
+    let lower_limit = 1;
 
     loop {
         // Try to match this node against the head of the working array.
@@ -303,12 +305,12 @@ fn validate_array_value(node: &Node, working_array: &mut WorkingArray) -> Valida
         working_array.array.borrow_mut().pop_front();
         count += 1;
 
-        if count >= occur.upper {
+        if count >= upper_limit {
             // Stop matching; we've consumed the maximum number of this key.
             break;
         }
     }
-    if count < occur.lower {
+    if count < lower_limit {
         return make_oops(&format!("failure to find array value"));
     }
     Ok(())
@@ -355,6 +357,7 @@ fn validate_map_member(member: &ArcNode, working_map: &mut WorkingMap) -> Valida
     match member.as_ref() {
         // FIXME: does it make sense for this to destructure & dispatch
         // each Node type here?  Is there any way to make this generic?
+        Node::Occur(o) => validate_map_occur(o, working_map),
         Node::KeyValue(kv) => validate_map_keyvalue(kv, working_map),
         Node::Rule(r) => {
             // NOTE!  validate() on a WorkingMap returns a Value (the result of a key-value lookup)
@@ -377,36 +380,40 @@ fn validate_map_member(member: &ArcNode, working_map: &mut WorkingMap) -> Valida
     }
 }
 
-/// Validate a key-value pair against a mutable working map.
-fn validate_map_keyvalue(kv: &KeyValue, working_map: &mut WorkingMap) -> ValidateResult {
-    let key_node = kv.key.as_ref();
-    let val_node = kv.value.as_ref();
+/// Validate an occurrence against a mutable working map.
+fn validate_map_occur(occur: &Occur, working_map: &mut WorkingMap) -> ValidateResult {
+    let (lower_limit, upper_limit) = occur.limits();
     let mut count: usize = 0;
 
     loop {
-        // Walk the working map, trying to match this key.
-        // A successful key match has the side-effect of removing that key from
-        // the working map (returning the value to us.)
-        // If we fail to validate a key, exit now with an error.
-        let extracted_val;
-        match working_map.validate(key_node) {
-            Ok(v) => extracted_val = v,
+        match validate_map_member(&occur.node, working_map) {
+            Ok(_) => (),
             Err(_) => break,
         }
-        // If we fail to validate a value, exit with an error.
-        match extracted_val.validate(val_node) {
-            Ok(_) => {
-                count += 1;
-                if count >= kv.occur.upper {
-                    // Stop matching; we've consumed the maximum number of this key.
-                    break;
-                }
-            }
-            Err(_) => break,
+        count += 1;
+        if count >= upper_limit {
+            // Stop matching; we've consumed the maximum number of this key.
+            break;
         }
     }
-    if count < kv.occur.lower {
+    if count < lower_limit {
         return make_oops(&format!("failure to find key-value pair"));
     }
     Ok(())
+}
+
+
+/// Validate a key-value pair against a mutable working map.
+fn validate_map_keyvalue(kv: &KeyValue, working_map: &mut WorkingMap) -> ValidateResult {
+    let key_node = kv.key.as_ref();
+    let val_node: &Node = kv.value.as_ref();
+
+    // This is using WorkingMap::Validate, which returns a Value.
+    // A successful key match has the side-effect of removing that key from
+    // the working map (and returning its value to us.)
+    // If we fail to validate a key, exit now with an error.
+    let extracted_val: Value = working_map.validate(key_node)?;
+
+    // Match the value that was returned.
+    extracted_val.validate(val_node)
 }

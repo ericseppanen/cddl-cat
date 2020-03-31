@@ -112,14 +112,13 @@ pub struct Choice {
 pub struct KeyValue {
     pub key: ArcNode,
     pub value: ArcNode,
-    pub occur: Occur,
 }
 
 impl KeyValue {
-    pub fn new(key: Node, value: Node, occur: Occur) -> KeyValue {
+    pub fn new(key: Node, value: Node) -> KeyValue {
         let key = Arc::new(key);
         let value = Arc::new(value);
-        KeyValue { key, value, occur }
+        KeyValue { key, value }
     }
 }
 
@@ -127,39 +126,50 @@ impl KeyValue {
 impl fmt::Debug for KeyValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut formatter = f.debug_tuple("KeyValue");
-        let scratch;
-        let occur = match (self.occur.lower, self.occur.upper) {
-            (1, 1) => "",
-            (0, 1) => "?",
-            (0, usize::MAX) => "*",
-            (1, usize::MAX) => "+",
-            (n, m) => {
-                scratch = format!("{}*{}", n, m);
-                &scratch
-            }
-        };
-        if !occur.is_empty() {
-            formatter.field(&occur);
-        }
-
         formatter.field(&self.key).field(&self.value).finish()
     }
 }
 
-/// Occurences measure how many times a value can appear.
-///
-/// Occurrences can always be represented by an inclusive [lower, upper]
-/// count limit.
-///
-/// required         => [1, 1]
-/// optional "?"     => [0, 1]
-/// zero-or-more "*" => [0, MAX]
-/// one-or-more "+"  => [1, MAX]
+#[derive(Debug, Clone)]
+pub enum OccurLimit {
+    Optional,
+    ZeroOrMore,
+    OneOrMore,
+    Numbered(usize, usize),
+}
+
+/// Occurences specify how many times a value can appear.
 ///
 #[derive(Debug, Clone)]
 pub struct Occur {
-    pub lower: usize,
-    pub upper: usize,
+    pub limit: OccurLimit,
+    pub node: ArcNode,
+}
+
+impl Occur {
+    /// Creates a new Occur from one of the CDDL occurrence chars ?*+
+    pub fn new(limit: OccurLimit, n: Node) -> Occur {
+        let node = Arc::new(n);
+        Occur {limit, node}
+    }
+
+    /// Return the lower and upper limits on this occurrence
+    ///
+    /// Occurrences can always be represented by an inclusive [lower, upper]
+    /// count limit.
+    ///
+    /// required         => [1, 1]
+    /// optional "?"     => [0, 1]
+    /// zero-or-more "*" => [0, MAX]
+    /// one-or-more "+"  => [1, MAX]
+    pub fn limits(&self) -> (usize, usize) {
+        match self.limit {
+            OccurLimit::Optional => (0, 1),
+            OccurLimit::ZeroOrMore => (0, usize::MAX),
+            OccurLimit::OneOrMore => (1, usize::MAX),
+            OccurLimit::Numbered(n, m) => (n, m),
+        }
+    }
 }
 
 /// A map containing key-value pairs.
@@ -219,6 +229,7 @@ pub enum Node {
     Array(Array),
     Group(Group), // FIXME: NameRef
     KeyValue(KeyValue),
+    Occur(Occur),
 }
 
 // This is just a convenience function, that reverses Node and Value, because
