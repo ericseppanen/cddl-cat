@@ -203,12 +203,10 @@ fn validate_cbor_array_groups() {
     let cddl_input = r#"thing = [a: int, (bar)] bar = (b: int, c: int)"#;
     validate_cbor_cddl_named("thing", cddl_input, cbor::ARRAY_123).unwrap();
 
-    if false { // FIXME: panics instead of returning an error.
-        // This is incorrectly constructed, because this is a key-value with
-        // a group name where the value should be.
-        let cddl_input = r#"thing = [a: int, b: bar] bar = (b: int, c: int)"#;
-        validate_cbor_cddl_named("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
-    }
+    // This is incorrectly constructed, because this is a key-value with
+    // a group name where the value should be.
+    let cddl_input = r#"thing = [a: int, b: bar] bar = (b: int, c: int)"#;
+    validate_cbor_cddl_named("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
 }
 
 #[test]

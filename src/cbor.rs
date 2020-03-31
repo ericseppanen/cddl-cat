@@ -101,9 +101,7 @@ impl Validate<()> for Value {
             Node::Map(m) => validate_map(m, value),
             Node::Array(a) => validate_array(a, value),
             Node::Rule(r) => generic::validate_rule(r, value),
-            Node::Group(g) => {
-                panic!("validate group {:?}", g);
-            }
+            Node::Group(g) => make_oops(&format!("can't validate standalone group {:?}", g)),
             Node::KeyValue(_) => unimplemented!(), // FIXME: can this even happen?
             Node::Occur(_) => panic!("reached Occur outside of array/map context"),
         }
