@@ -1,8 +1,7 @@
 //! This module contains generic validation helper functions.
 
-use crate::ivt::{Rule, Choice, Validate, Node};
+use crate::ivt::{Choice, Node, Rule, Validate};
 use crate::util::*;
-
 
 /// Validate a `Choice` containing an arbitrary number of "option" nodes.
 ///

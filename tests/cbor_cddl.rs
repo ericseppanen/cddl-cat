@@ -300,7 +300,8 @@ fn validate_cbor_map_group() {
     let cddl_input = r#"thing = {agroup empty} agroup = (age: int, name: tstr) empty = ()"#;
     validate_cbor_cddl_named("thing", cddl_input, &cbor_bytes).unwrap();
 
-    let cddl_input = r#"thing = {agroup maybe} agroup = (age: int, name: tstr) maybe = (? minor: bool)"#;
+    let cddl_input =
+        r#"thing = {agroup maybe} agroup = (age: int, name: tstr) maybe = (? minor: bool)"#;
     validate_cbor_cddl_named("thing", cddl_input, &cbor_bytes).unwrap();
 
     let cddl_input = r#"thing = {name: tstr, agroup} agroup = (wrong: int)"#;

@@ -152,7 +152,7 @@ impl Occur {
     /// Creates a new Occur from one of the CDDL occurrence chars ?*+
     pub fn new(limit: OccurLimit, n: Node) -> Occur {
         let node = Arc::new(n);
-        Occur {limit, node}
+        Occur { limit, node }
     }
 
     /// Return the lower and upper limits on this occurrence
