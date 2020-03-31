@@ -75,13 +75,20 @@ fn validate_cbor_float() {
 }
 
 #[test]
+fn validate_cbor_choice() {
+    let cddl_input = r#"thing = 23 / 24"#;
+    validate_cbor_from_slice(cddl_input, cbor::INT_23).unwrap();
+    validate_cbor_from_slice(cddl_input, cbor::INT_24).unwrap();
+
+    let cddl_input = r#"thing = (foo // bar) foo = (int / float) bar = tstr"#;
+    validate_cbor_cddl_named("thing", cddl_input, cbor::INT_23).unwrap();
+    validate_cbor_cddl_named("thing", cddl_input, cbor::FLOAT_1_0).unwrap();
+    validate_cbor_cddl_named("thing", cddl_input, cbor::TEXT_IETF).unwrap();
+    validate_cbor_cddl_named("thing", cddl_input, cbor::BOOL_TRUE).unwrap_err();
+}
+
+#[test]
 fn validate_cbor_integer() {
-    if false {
-        // FIXME: haven't implemented choice flatten yet.
-        let cddl_input = r#"thing = 23 / 24"#;
-        validate_cbor_from_slice(cddl_input, cbor::INT_23).unwrap();
-        validate_cbor_from_slice(cddl_input, cbor::INT_24).unwrap();
-    }
     let cddl_input = r#"thing = 1"#;
     validate_cbor_from_slice(cddl_input, cbor::NULL).unwrap_err();
     validate_cbor_from_slice(cddl_input, cbor::FLOAT_1_0).unwrap_err();

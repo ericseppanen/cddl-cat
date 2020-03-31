@@ -139,10 +139,21 @@ fn flatten_grouprule(grouprule: &ast::GroupRule) -> (String, Node) {
 }
 
 fn flatten_type(ty: &ast::Type) -> Node {
-    // FIXME: len > 1 means we should emit a Choice instead.
-    assert!(ty.type_choices.len() == 1);
-    let ty1 = &ty.type_choices[0];
-    flatten_type1(ty1)
+    let mut options: Vec<Node> = ty.type_choices.iter().map(|type1| {
+        flatten_type1(type1)
+    }).collect();
+
+    match options.len() {
+        0 => panic!("flatten type with 0 options"),
+        1 => options.drain(..).next().unwrap(),  // FIXME: awkward
+        _ => {
+            // FIXME: these gymnastics around Arc<Node> vs Node need to go away.
+            let arced: VecNode = options.drain(..).map(|op| {
+                Arc::new(op)
+            }).collect();
+            Node::Choice(Choice{options: arced})
+        }
+    }
 }
 
 fn flatten_type1(ty1: &ast::Type1) -> Node {
@@ -169,7 +180,8 @@ fn flatten_type2(ty2: &ast::Type2) -> Node {
             });
             Node::Literal(Literal::Bytes(bytes))
         }
-        _ => unimplemented!(),
+        Type2::ParenthesizedType { pt, ..} => flatten_type(pt),
+        _ => panic!("flatten_type2 unimplemented {:#?}", ty2),
     }
 }
 
@@ -202,12 +214,23 @@ fn flatten_array(group: &ast::Group) -> Node {
     Node::Array(Array { members: kvs })
 }
 
-// FIXME: special handling for GroupRule vs Map vs Array?
+// Returns an ivt::Group node, or a vector of other nodes.
 fn flatten_group(group: &ast::Group) -> VecNode {
-    // FIXME: len > 1 means we should emit a Choice instead.
-    assert!(group.group_choices.len() == 1);
-    let grpchoice = &group.group_choices[0];
-    let kvs: VecNode = grpchoice
+    if group.group_choices.len() == 1 {
+        let groupchoice = &group.group_choices[0];
+        flatten_groupchoice(groupchoice)
+    } else {
+        // Emit a Choice node, containing a vector of Group nodes.
+        let options: VecNode = group.group_choices.iter().map(|gc| {
+            let inner_members = flatten_groupchoice(gc);
+            Arc::new(Node::Group(Group{members: inner_members}))
+        }).collect();
+        vec![Arc::new(Node::Choice(Choice{options}))]
+    }
+}
+
+fn flatten_groupchoice(groupchoice: &ast::GroupChoice) -> VecNode {
+    let kvs: VecNode = groupchoice
         .group_entries
         .iter()
         .map(|ge_tuple| {

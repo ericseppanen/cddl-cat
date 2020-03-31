@@ -57,7 +57,6 @@ pub fn validate_cbor(node: &Node, value: &Value) -> ValidateResult {
 pub fn validate_cbor_cddl_named(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResult {
     // Parse the CDDL text and flatten it into IVT form.
     let flat_cddl = flatten_from_str(cddl)?;
-
     let rule_node: &Node = flat_cddl.get(name).ok_or_else(|| {
         let msg = format!("rule/group lookup failure: {}", name);
         ValidateError::Oops(msg)
@@ -101,7 +100,7 @@ impl Validate<()> for Value {
             Node::Map(m) => validate_map(m, value),
             Node::Array(a) => validate_array(a, value),
             Node::Rule(r) => generic::validate_rule(r, value),
-            Node::Group(g) => make_oops(&format!("can't validate standalone group {:?}", g)),
+            Node::Group(g) => validate_standalone_group(g, value),
             Node::KeyValue(_) => unimplemented!(), // FIXME: can this even happen?
             Node::Occur(_) => panic!("reached Occur outside of array/map context"),
         }
@@ -422,4 +421,17 @@ fn validate_map_keyvalue(kv: &KeyValue, working_map: &mut WorkingMap) -> Validat
 
     // Match the value that was returned.
     extracted_val.validate(val_node)
+}
+
+fn validate_standalone_group(g: &Group, value: &Value) -> ValidateResult {
+    // Since we're not in an array or map context, it's not clear how we should
+    // validate a group containing multiple elements.  If we see one, return an
+    // error.
+    match g.members.len() {
+        1 => {
+            // Since our group has length 1, validate against that single element.
+            value.validate(&g.members[0])
+        }
+        _ => make_oops(&format!("can't validate complex standalone group {:?}", g)),
+    }
 }
