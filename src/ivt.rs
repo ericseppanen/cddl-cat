@@ -7,7 +7,10 @@
 //! CBOR or JSON), but it helps make writing those validators easier.
 
 use crate::util::*;
+use std::collections::BTreeMap;
 use std::fmt;
+
+pub type RulesByName = BTreeMap<String, Node>;
 
 /// A trait that allows recursive validation of an AST.
 pub trait Validate<T> {
@@ -20,17 +23,20 @@ pub trait Validate<T> {
 /// how to resolve ivt::Rule references.
 pub struct Context {
     // FIXME: need a reference to the entire Rule set.
-// rules: &RulesByName
+    pub rules: RulesByName,
 }
 
 impl Context {
-    pub fn new() -> Context {
-        Context {}
+    pub fn new(rules: RulesByName) -> Context {
+        Context { rules }
     }
 
     // FIXME: should return Result<Node, ValidateError>
     pub fn lookup_rule(&self, name: &str) -> &Node {
-        panic!("lookup_rule not implemented yet");
+        match self.rules.get(name) {
+            Some(node) => node,
+            None => panic!("tried to access nonexistent rule '{}'", name),
+        }
     }
 }
 

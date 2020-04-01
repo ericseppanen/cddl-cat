@@ -20,13 +20,10 @@ use crate::util::ValidateError;
 use cddl::ast::{self, CDDL};
 use cddl::parser::cddl_from_str;
 use hex;
-use std::collections::BTreeMap;
 
 pub type FlattenResult<T> = std::result::Result<T, ValidateError>;
 
 pub type MutateResult = std::result::Result<(), ValidateError>;
-
-pub type RulesByName = BTreeMap<String, Node>;
 
 pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
     let cddl = cddl_from_str(cddl_input).map_err(|e| {
@@ -386,7 +383,7 @@ fn test_flatten_type_reference() {
     let cddl_input = r#"thing = foo"#;
     let result = flatten_from_str(cddl_input).unwrap();
     let result = format!("{:?}", result);
-    assert_eq!(result, r#"{"thing": Rule(Rule { name: "foo!" })}"#);
+    assert_eq!(result, r#"{"thing": Rule(Rule { name: "foo" })}"#);
 }
 
 #[test]
@@ -418,7 +415,7 @@ fn test_flatten_map() {
     let result = format!("{:?}", result);
     let expected = concat!(
         r#"{"foo": Literal(Text("bar")), "thing": Map(Map { members: ["#,
-        r#"KeyValue(KeyValue(Rule(Rule { name: "foo!" }), PreludeType(Tstr)))] })}"#
+        r#"KeyValue(KeyValue(Rule(Rule { name: "foo" }), PreludeType(Tstr)))] })}"#
     );
     // FIXME: is Rule the right output?  What if "abc" was a group name?
     assert_eq!(result, expected);

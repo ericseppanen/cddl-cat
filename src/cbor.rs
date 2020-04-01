@@ -57,7 +57,9 @@ pub fn validate_cbor(node: &Node, value: &Value, ctx: &Context) -> ValidateResul
 pub fn validate_cbor_cddl_named(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResult {
     // Parse the CDDL text and flatten it into IVT form.
     let flat_cddl = flatten_from_str(cddl)?;
-    let rule_node: &Node = flat_cddl.get(name).ok_or_else(|| {
+    let ctx = Context::new(flat_cddl);
+
+    let rule_node: &Node = ctx.rules.get(name).ok_or_else(|| {
         let msg = format!("rule/group lookup failure: {}", name);
         ValidateError::Oops(msg)
     })?;
@@ -67,8 +69,6 @@ pub fn validate_cbor_cddl_named(name: &str, cddl: &str, cbor: &[u8]) -> Validate
         ValidateError::Oops(msg)
     })?;
 
-    let ctx = Context::new();
-
     validate_cbor(rule_node, &cbor_value, &ctx)
 }
 
@@ -76,6 +76,8 @@ pub fn validate_cbor_cddl_named(name: &str, cddl: &str, cbor: &[u8]) -> Validate
 pub fn validate_cbor_cddl(cddl: &str, cbor: &[u8]) -> ValidateResult {
     // Parse the CDDL text and flatten it into IVT form.
     let flat_cddl = flatten_from_str(cddl)?;
+    let ctx = Context::new(flat_cddl);
+
     let cbor_value: Value = serde_cbor::from_slice(cbor).map_err(|e| {
         let msg = format!("cbor parsing failed: {}", e);
         ValidateError::Oops(msg)
@@ -85,9 +87,7 @@ pub fn validate_cbor_cddl(cddl: &str, cbor: &[u8]) -> ValidateResult {
     // ordering!
     // For now, just grab the first rule we find.  We'll be wrong some of the time,
     // but we'll fix that in a moment.
-    let rule_node: &Node = flat_cddl.values().next().unwrap();
-
-    let ctx = Context::new();
+    let rule_node: &Node = ctx.rules.values().next().unwrap();
 
     validate_cbor(rule_node, &cbor_value, &ctx)
 }
