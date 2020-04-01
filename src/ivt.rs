@@ -6,17 +6,10 @@
 //! This module doesn't know anything about validating specific types (e.g.
 //! CBOR or JSON), but it helps make writing those validators easier.
 
-use crate::context::Context;
-use crate::util::*;
 use std::collections::BTreeMap;
 use std::fmt;
 
 pub type RulesByName = BTreeMap<String, Node>;
-
-/// A trait that allows recursive validation of an AST.
-pub trait Validate<T> {
-    fn validate<'c>(&'c self, node: &Node, ctx: &(dyn Context + 'c)) -> TempResult<T>;
-}
 
 // Some useful type shortcuts
 pub type VecNode = Vec<Node>;

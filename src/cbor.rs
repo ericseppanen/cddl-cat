@@ -4,11 +4,9 @@
 
 use crate::context::{BasicContext, Context};
 use crate::flatten::flatten_from_str;
-use crate::generic;
 use crate::ivt::*;
 use crate::util::*;
 use serde_cbor::Value;
-use std::cell::RefCell;
 use std::collections::BTreeMap; // used in serde_cbor Value::Map
 use std::collections::VecDeque;
 
@@ -16,20 +14,14 @@ type ValueMap = BTreeMap<Value, Value>;
 
 /// This struct allows us to maintain a map that is consumed during validation.
 struct WorkingMap {
-    // This only uses RefCell because Rust doesn't allow traits to be generic
-    // over mutable-ness.  We want to implement the Validate trait on this
-    // struct, but we know it's going to be mutable.  So instead of having
-    // a separate ValidateMut trait we accept that this struct will always
-    // be treated as immutable and we use interior mutability to actually
-    // change things.
-    map: RefCell<ValueMap>,
+    map: ValueMap,
 }
 
 impl WorkingMap {
     /// Makes a copy of an existing map's table.
     fn new(value_map: &ValueMap) -> WorkingMap {
         WorkingMap {
-            map: RefCell::new(value_map.clone()),
+            map: value_map.clone(),
         }
     }
 }
@@ -37,7 +29,7 @@ impl WorkingMap {
 /// This struct allows us to maintain a copy of an array that is consumed
 /// during validation.
 struct WorkingArray {
-    array: RefCell<VecDeque<Value>>,
+    array: VecDeque<Value>,
 }
 
 impl WorkingArray {
@@ -45,14 +37,14 @@ impl WorkingArray {
     fn new(array: &Vec<Value>) -> WorkingArray {
         let deque: VecDeque<Value> = array.iter().cloned().collect();
         WorkingArray {
-            array: RefCell::new(deque),
+            array: deque,
         }
     }
 }
 
 /// The main entry point for validating CBOR data against an IVT.
 pub fn validate_cbor(node: &Node, value: &Value, ctx: &dyn Context) -> ValidateResult {
-    value.validate(node, ctx)
+    validate(value, node, ctx)
 }
 
 pub fn validate_cbor_cddl_named(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResult {
@@ -93,37 +85,60 @@ pub fn validate_cbor_cddl(cddl: &str, cbor: &[u8]) -> ValidateResult {
     validate_cbor(rule_node, &cbor_value, &ctx)
 }
 
-impl Validate<()> for Value {
-    // This is the main validation dispatch function.
-    // It tries to match a Node and a Value, recursing as needed.
-    fn validate<'a>(&'a self, node: &Node, ctx: &(dyn Context + 'a)) -> ValidateResult {
-        let value = self;
-        match node {
-            Node::Literal(l) => validate_literal(l, value),
-            Node::PreludeType(p) => validate_prelude_type(p, value),
-            Node::Choice(c) => generic::validate_choice(c, value, ctx),
-            Node::Map(m) => validate_map(m, value, ctx),
-            Node::Array(a) => validate_array(a, value, ctx),
-            Node::Rule(r) => generic::validate_rule(r, value, ctx),
-            Node::Group(g) => validate_standalone_group(g, value, ctx),
-            Node::KeyValue(_) => unimplemented!(), // FIXME: can this even happen?
-            Node::Occur(_) => panic!("reached Occur outside of array/map context"),
-        }
+// This is the main validation dispatch function.
+// It tries to match a Node and a Value, recursing as needed.
+pub fn validate(value: &Value, node: &Node, ctx: &dyn Context) -> ValidateResult {
+    match node {
+        Node::Literal(l) => validate_literal(l, value),
+        Node::PreludeType(p) => validate_prelude_type(p, value),
+        Node::Choice(c) => validate_choice(c, value, ctx),
+        Node::Map(m) => validate_map(m, value, ctx),
+        Node::Array(a) => validate_array(a, value, ctx),
+        Node::Rule(r) => validate_rule(r, value, ctx),
+        Node::Group(g) => validate_standalone_group(g, value, ctx),
+        Node::KeyValue(_) => unimplemented!(), // FIXME: can this even happen?
+        Node::Occur(_) => panic!("reached Occur outside of array/map context"),
     }
 }
 
-impl Validate<Value> for WorkingMap {
-    // Dispatch for handling Map key types.  This is specialized because
-    // some keys (literal values) can be found with a fast search, while
-    // others may require a linear search.
-    fn validate<'a>(&'a self, node: &Node, ctx: &(dyn Context + 'a)) -> TempResult<Value> {
-        let value_map = self;
-        match node {
-            Node::Literal(l) => map_search_literal(l, value_map),
-            _ => map_search(node, value_map, ctx),
-        }
+// Perform map key search.
+// Some keys (literal values) can be found with a fast search, while
+// others may require a linear search.
+fn validate_workingmap(
+    value_map: &mut WorkingMap,
+    node: &Node,
+    ctx: &dyn Context,
+) -> TempResult<Value> {
+    match node {
+        Node::Literal(l) => map_search_literal(l, value_map),
+        _ => map_search(node, value_map, ctx),
     }
 }
+
+/// Validate a `Choice` containing an arbitrary number of "option" nodes.
+///
+/// If any of the options matches, this validation is successful.
+pub fn validate_choice(
+    choice: &Choice,
+    value: &Value,
+    ctx: &dyn Context,
+) -> ValidateResult {
+    for node in &choice.options {
+        if let Ok(()) = validate(value, node, ctx) {
+            return Ok(());
+        }
+    }
+    make_oops("choice failed")
+}
+
+/// Validate a `Rule` reference
+///
+/// This just falls through to the referenced `Node`.
+pub fn validate_rule(rule: &Rule, value: &Value, ctx: &dyn Context) -> ValidateResult {
+    let node = ctx.lookup_rule(&rule.name)?;
+    validate(value, &node, ctx)
+}
+
 
 /// Create a `Value` from a `Literal`.
 impl From<&Literal> for Value {
@@ -145,12 +160,11 @@ fn validate_literal(literal: &Literal, value: &Value) -> ValidateResult {
     make_oops("failed validate_literal")
 }
 
-fn map_search_literal(literal: &Literal, working_map: &WorkingMap) -> TempResult<Value> {
+fn map_search_literal(literal: &Literal, working_map: &mut WorkingMap) -> TempResult<Value> {
     // Find a key in the working map, looking for a match.
     // If we find one, remove that key.
-    let mut working_mut = working_map.map.borrow_mut();
     let search_key = Value::from(literal);
-    match working_mut.remove(&search_key) {
+    match working_map.map.remove(&search_key) {
         Some(val) => {
             // We found the key, and removed it from the working map.
             // This means validation was successful.
@@ -163,10 +177,10 @@ fn map_search_literal(literal: &Literal, working_map: &WorkingMap) -> TempResult
     }
 }
 
-fn map_search<'a>(
+fn map_search(
     node: &Node,
-    working_map: &WorkingMap,
-    ctx: &(dyn Context + 'a),
+    working_map: &mut WorkingMap,
+    ctx: &dyn Context,
 ) -> TempResult<Value> {
     // Iterate over each key in the working map, looking for a match.
     // If we find one, remove that key.
@@ -176,16 +190,15 @@ fn map_search<'a>(
     // { * tstr => int, * tstr => tstr }
     // See rfc8610 section 3.5.4 for a longer explanation of "cuts".
 
-    let mut working_mut = working_map.map.borrow_mut();
-    for key in working_mut.keys() {
-        let attempt = key.validate(node, ctx);
+    for key in working_map.map.keys() {
+        let attempt = validate(key, node, ctx);
         match attempt {
             Ok(_) => {
                 // This key matches the node.  Remove the key and return success.
                 // Some juggling is required to satisfy the borrow checker.
                 let key2 = key.clone();
                 drop(key);
-                let val = working_mut.remove(&key2).unwrap();
+                let val = working_map.map.remove(&key2).unwrap();
                 return Ok(val);
             }
             Err(_) => {
@@ -216,17 +229,17 @@ fn validate_prelude_type(ty: &PreludeType, value: &Value) -> ValidateResult {
 }
 
 // FIXME: should this be combined with Map handling?
-fn validate_array<'a>(ar: &Array, value: &Value, ctx: &(dyn Context + 'a)) -> ValidateResult {
+fn validate_array(ar: &Array, value: &Value, ctx: &dyn Context) -> ValidateResult {
     match value {
         Value::Array(a) => validate_array_part2(ar, a, ctx),
         _ => make_oops("expected array, found not-array"),
     }
 }
 
-fn validate_array_part2<'a>(
+fn validate_array_part2(
     ar: &Array,
     value_array: &Vec<Value>,
-    ctx: &(dyn Context + 'a),
+    ctx: &dyn Context,
 ) -> ValidateResult {
     // Strategy for validating an array:
     // 1. We assume that the code that constructed the IVT Array placed the
@@ -250,7 +263,7 @@ fn validate_array_part2<'a>(
     for member in &ar.members {
         validate_array_member(member, &mut working_array, ctx)?;
     }
-    if working_array.array.into_inner().is_empty() {
+    if working_array.array.is_empty() {
         Ok(())
     } else {
         // If the working map isn't empty, that means we had some extra values
@@ -259,10 +272,10 @@ fn validate_array_part2<'a>(
     }
 }
 
-fn validate_array_member<'a>(
+fn validate_array_member(
     member: &Node,
     working_array: &mut WorkingArray,
-    ctx: &(dyn Context + 'a),
+    ctx: &dyn Context,
 ) -> ValidateResult {
     match member {
         // FIXME: does it make sense for this to destructure & dispatch
@@ -299,10 +312,10 @@ fn validate_array_member<'a>(
 
 /// Validate an occurrence against a mutable working array.
 // FIXME: this is pretty similar to validate_map_occur; maybe they can be combined?
-fn validate_array_occur<'a>(
+fn validate_array_occur(
     occur: &Occur,
     working_map: &mut WorkingArray,
-    ctx: &(dyn Context + 'a),
+    ctx: &dyn Context,
 ) -> ValidateResult {
     let (lower_limit, upper_limit) = occur.limits();
     let mut count: usize = 0;
@@ -325,34 +338,33 @@ fn validate_array_occur<'a>(
 }
 
 /// Validate a key-value pair against a mutable working array.
-fn validate_array_value<'a>(
+fn validate_array_value(
     node: &Node,
     working_array: &mut WorkingArray,
-    ctx: &(dyn Context + 'a),
+    ctx: &dyn Context,
 ) -> ValidateResult {
-    let mut working = working_array.array.borrow_mut();
-    match working.front() {
+    match working_array.array.front() {
         Some(val) => {
-            val.validate(node, ctx)?;
+            validate(val, node, ctx)?;
             // We had a successful match; remove the matched value.
-            working.pop_front();
+            working_array.array.pop_front();
             Ok(())
         }
         None => make_oops("failed to find array member"),
     }
 }
 
-fn validate_map<'a>(m: &Map, value: &Value, ctx: &(dyn Context + 'a)) -> ValidateResult {
+fn validate_map(m: &Map, value: &Value, ctx: &dyn Context) -> ValidateResult {
     match value {
         Value::Map(vm) => validate_map_part2(m, vm, ctx),
         _ => make_oops("expected map, found not-a-map"),
     }
 }
 
-fn validate_map_part2<'a>(
+fn validate_map_part2(
     m: &Map,
     value_map: &ValueMap,
-    ctx: &(dyn Context + 'a),
+    ctx: &dyn Context,
 ) -> ValidateResult {
     // Strategy for validating a map:
     // 1. We assume that the code that constructed the IVT Map placed the keys
@@ -374,7 +386,7 @@ fn validate_map_part2<'a>(
     for member in &m.members {
         validate_map_member(member, &mut working_map, ctx)?;
     }
-    if working_map.map.into_inner().is_empty() {
+    if working_map.map.is_empty() {
         Ok(())
     } else {
         // If the working map isn't empty, that means we had some extra values
@@ -383,10 +395,10 @@ fn validate_map_part2<'a>(
     }
 }
 
-fn validate_map_member<'a>(
+fn validate_map_member(
     member: &Node,
     working_map: &mut WorkingMap,
-    ctx: &(dyn Context + 'a),
+    ctx: &dyn Context,
 ) -> ValidateResult {
     match member {
         // FIXME: does it make sense for this to destructure & dispatch
@@ -429,10 +441,10 @@ fn validate_map_member<'a>(
 }
 
 /// Validate an occurrence against a mutable working map.
-fn validate_map_occur<'a>(
+fn validate_map_occur(
     occur: &Occur,
     working_map: &mut WorkingMap,
-    ctx: &(dyn Context + 'a),
+    ctx: &dyn Context,
 ) -> ValidateResult {
     let (lower_limit, upper_limit) = occur.limits();
     let mut count: usize = 0;
@@ -455,10 +467,10 @@ fn validate_map_occur<'a>(
 }
 
 /// Validate a key-value pair against a mutable working map.
-fn validate_map_keyvalue<'a>(
+fn validate_map_keyvalue(
     kv: &KeyValue,
     working_map: &mut WorkingMap,
-    ctx: &(dyn Context + 'a),
+    ctx: &dyn Context,
 ) -> ValidateResult {
     let key_node = &kv.key;
     let val_node = &kv.value;
@@ -467,16 +479,16 @@ fn validate_map_keyvalue<'a>(
     // A successful key match has the side-effect of removing that key from
     // the working map (and returning its value to us.)
     // If we fail to validate a key, exit now with an error.
-    let extracted_val: Value = working_map.validate(key_node, ctx)?;
+    let extracted_val: Value = validate_workingmap(working_map, key_node, ctx)?;
 
     // Match the value that was returned.
-    extracted_val.validate(val_node, ctx)
+    validate(&extracted_val, val_node, ctx)
 }
 
-fn validate_standalone_group<'a>(
+fn validate_standalone_group(
     g: &Group,
     value: &Value,
-    ctx: &(dyn Context + 'a),
+    ctx: &dyn Context,
 ) -> ValidateResult {
     // Since we're not in an array or map context, it's not clear how we should
     // validate a group containing multiple elements.  If we see one, return an
@@ -484,7 +496,7 @@ fn validate_standalone_group<'a>(
     match g.members.len() {
         1 => {
             // Since our group has length 1, validate against that single element.
-            value.validate(&g.members[0], ctx)
+            validate(value, &g.members[0], ctx)
         }
         _ => make_oops(&format!("can't validate complex standalone group {:?}", g)),
     }

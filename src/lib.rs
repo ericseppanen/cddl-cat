@@ -14,7 +14,7 @@
 //!    easily validated.
 //!
 //! 2. The IVT is constructed almost entirely of [`Node`] elements, allowing
-//!    recursive validation using the [`Validate`] trait.
+//!    recursive validation.
 //!
 //! 3. Validation helper functions that are fully generic (like recursive
 //!    validation of [`Choice`] types) can be written once and used by all
@@ -30,7 +30,6 @@
 
 pub mod cbor;
 pub mod flatten;
-pub mod generic;
 pub mod ivt;
 pub mod util;
 pub mod context;
