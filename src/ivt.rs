@@ -6,6 +6,7 @@
 //! This module doesn't know anything about validating specific types (e.g.
 //! CBOR or JSON), but it helps make writing those validators easier.
 
+use crate::context::Context;
 use crate::util::*;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -14,30 +15,7 @@ pub type RulesByName = BTreeMap<String, Node>;
 
 /// A trait that allows recursive validation of an AST.
 pub trait Validate<T> {
-    fn validate(&self, node: &Node, ctx: &Context) -> TempResult<T>;
-}
-
-/// This contains any context information required for validation.
-///
-/// Right now, that only includes a dispatch object that understands
-/// how to resolve ivt::Rule references.
-pub struct Context {
-    // FIXME: need a reference to the entire Rule set.
-    pub rules: RulesByName,
-}
-
-impl Context {
-    pub fn new(rules: RulesByName) -> Context {
-        Context { rules }
-    }
-
-    // FIXME: should return Result<Node, ValidateError>
-    pub fn lookup_rule(&self, name: &str) -> &Node {
-        match self.rules.get(name) {
-            Some(node) => node,
-            None => panic!("tried to access nonexistent rule '{}'", name),
-        }
-    }
+    fn validate<'c>(&'c self, node: &Node, ctx: &(dyn Context + 'c)) -> TempResult<T>;
 }
 
 // Some useful type shortcuts

@@ -33,5 +33,6 @@ pub mod flatten;
 pub mod generic;
 pub mod ivt;
 pub mod util;
+pub mod context;
 
 pub use cbor::validate_cbor;

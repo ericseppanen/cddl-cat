@@ -2,6 +2,7 @@
 //!
 //! More precisely, it validates `serde_cbor::Value` trees.
 
+use crate::context::{BasicContext, Context};
 use crate::flatten::flatten_from_str;
 use crate::generic;
 use crate::ivt::*;
@@ -50,14 +51,14 @@ impl WorkingArray {
 }
 
 /// The main entry point for validating CBOR data against an IVT.
-pub fn validate_cbor(node: &Node, value: &Value, ctx: &Context) -> ValidateResult {
+pub fn validate_cbor(node: &Node, value: &Value, ctx: &dyn Context) -> ValidateResult {
     value.validate(node, ctx)
 }
 
 pub fn validate_cbor_cddl_named(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResult {
     // Parse the CDDL text and flatten it into IVT form.
     let flat_cddl = flatten_from_str(cddl)?;
-    let ctx = Context::new(flat_cddl);
+    let ctx = BasicContext::new(flat_cddl);
 
     let rule_node: &Node = ctx.rules.get(name).ok_or_else(|| {
         let msg = format!("rule/group lookup failure: {}", name);
@@ -76,7 +77,7 @@ pub fn validate_cbor_cddl_named(name: &str, cddl: &str, cbor: &[u8]) -> Validate
 pub fn validate_cbor_cddl(cddl: &str, cbor: &[u8]) -> ValidateResult {
     // Parse the CDDL text and flatten it into IVT form.
     let flat_cddl = flatten_from_str(cddl)?;
-    let ctx = Context::new(flat_cddl);
+    let ctx = BasicContext::new(flat_cddl);
 
     let cbor_value: Value = serde_cbor::from_slice(cbor).map_err(|e| {
         let msg = format!("cbor parsing failed: {}", e);
@@ -95,7 +96,7 @@ pub fn validate_cbor_cddl(cddl: &str, cbor: &[u8]) -> ValidateResult {
 impl Validate<()> for Value {
     // This is the main validation dispatch function.
     // It tries to match a Node and a Value, recursing as needed.
-    fn validate(&self, node: &Node, ctx: &Context) -> ValidateResult {
+    fn validate<'a>(&'a self, node: &Node, ctx: &(dyn Context + 'a)) -> ValidateResult {
         let value = self;
         match node {
             Node::Literal(l) => validate_literal(l, value),
@@ -115,7 +116,7 @@ impl Validate<Value> for WorkingMap {
     // Dispatch for handling Map key types.  This is specialized because
     // some keys (literal values) can be found with a fast search, while
     // others may require a linear search.
-    fn validate(&self, node: &Node, ctx: &Context) -> TempResult<Value> {
+    fn validate<'a>(&'a self, node: &Node, ctx: &(dyn Context + 'a)) -> TempResult<Value> {
         let value_map = self;
         match node {
             Node::Literal(l) => map_search_literal(l, value_map),
@@ -162,7 +163,11 @@ fn map_search_literal(literal: &Literal, working_map: &WorkingMap) -> TempResult
     }
 }
 
-fn map_search(node: &Node, working_map: &WorkingMap, ctx: &Context) -> TempResult<Value> {
+fn map_search<'a>(
+    node: &Node,
+    working_map: &WorkingMap,
+    ctx: &(dyn Context + 'a),
+) -> TempResult<Value> {
     // Iterate over each key in the working map, looking for a match.
     // If we find one, remove that key.
     // This is less efficient than map_search_literal.
@@ -211,14 +216,18 @@ fn validate_prelude_type(ty: &PreludeType, value: &Value) -> ValidateResult {
 }
 
 // FIXME: should this be combined with Map handling?
-fn validate_array(ar: &Array, value: &Value, ctx: &Context) -> ValidateResult {
+fn validate_array<'a>(ar: &Array, value: &Value, ctx: &(dyn Context + 'a)) -> ValidateResult {
     match value {
         Value::Array(a) => validate_array_part2(ar, a, ctx),
         _ => make_oops("expected array, found not-array"),
     }
 }
 
-fn validate_array_part2(ar: &Array, value_array: &Vec<Value>, ctx: &Context) -> ValidateResult {
+fn validate_array_part2<'a>(
+    ar: &Array,
+    value_array: &Vec<Value>,
+    ctx: &(dyn Context + 'a),
+) -> ValidateResult {
     // Strategy for validating an array:
     // 1. We assume that the code that constructed the IVT Array placed the
     //    members in matching order (literals first, more general types at the
@@ -250,10 +259,10 @@ fn validate_array_part2(ar: &Array, value_array: &Vec<Value>, ctx: &Context) -> 
     }
 }
 
-fn validate_array_member(
+fn validate_array_member<'a>(
     member: &Node,
     working_array: &mut WorkingArray,
-    ctx: &Context,
+    ctx: &(dyn Context + 'a),
 ) -> ValidateResult {
     match member {
         // FIXME: does it make sense for this to destructure & dispatch
@@ -272,7 +281,7 @@ fn validate_array_member(
             // through" KeyValue and Group nodes while remembering that we are
             // in an array context (with a particular working copy).
             // BUG: Choice nodes will have the same problem.
-            let next_node = ctx.lookup_rule(&r.name);
+            let next_node = ctx.lookup_rule(&r.name)?;
             validate_array_member(next_node, working_array, ctx)
         }
         Node::Group(g) => {
@@ -290,10 +299,10 @@ fn validate_array_member(
 
 /// Validate an occurrence against a mutable working array.
 // FIXME: this is pretty similar to validate_map_occur; maybe they can be combined?
-fn validate_array_occur(
+fn validate_array_occur<'a>(
     occur: &Occur,
     working_map: &mut WorkingArray,
-    ctx: &Context,
+    ctx: &(dyn Context + 'a),
 ) -> ValidateResult {
     let (lower_limit, upper_limit) = occur.limits();
     let mut count: usize = 0;
@@ -316,10 +325,10 @@ fn validate_array_occur(
 }
 
 /// Validate a key-value pair against a mutable working array.
-fn validate_array_value(
+fn validate_array_value<'a>(
     node: &Node,
     working_array: &mut WorkingArray,
-    ctx: &Context,
+    ctx: &(dyn Context + 'a),
 ) -> ValidateResult {
     let mut working = working_array.array.borrow_mut();
     match working.front() {
@@ -333,14 +342,18 @@ fn validate_array_value(
     }
 }
 
-fn validate_map(m: &Map, value: &Value, ctx: &Context) -> ValidateResult {
+fn validate_map<'a>(m: &Map, value: &Value, ctx: &(dyn Context + 'a)) -> ValidateResult {
     match value {
         Value::Map(vm) => validate_map_part2(m, vm, ctx),
         _ => make_oops("expected map, found not-a-map"),
     }
 }
 
-fn validate_map_part2(m: &Map, value_map: &ValueMap, ctx: &Context) -> ValidateResult {
+fn validate_map_part2<'a>(
+    m: &Map,
+    value_map: &ValueMap,
+    ctx: &(dyn Context + 'a),
+) -> ValidateResult {
     // Strategy for validating a map:
     // 1. We assume that the code that constructed the IVT Map placed the keys
     //    in matching order (literals first, more general types at the end) so
@@ -370,10 +383,10 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap, ctx: &Context) -> ValidateR
     }
 }
 
-fn validate_map_member(
+fn validate_map_member<'a>(
     member: &Node,
     working_map: &mut WorkingMap,
-    ctx: &Context,
+    ctx: &(dyn Context + 'a),
 ) -> ValidateResult {
     match member {
         // FIXME: does it make sense for this to destructure & dispatch
@@ -385,7 +398,7 @@ fn validate_map_member(
             //
             // So we can't use generic::validate() here.  We need to punch down
             // a level into the rule and match again.
-            let next_node = ctx.lookup_rule(&r.name);
+            let next_node = ctx.lookup_rule(&r.name)?;
             validate_map_member(next_node, working_map, ctx)
         }
         Node::Group(g) => {
@@ -416,10 +429,10 @@ fn validate_map_member(
 }
 
 /// Validate an occurrence against a mutable working map.
-fn validate_map_occur(
+fn validate_map_occur<'a>(
     occur: &Occur,
     working_map: &mut WorkingMap,
-    ctx: &Context,
+    ctx: &(dyn Context + 'a),
 ) -> ValidateResult {
     let (lower_limit, upper_limit) = occur.limits();
     let mut count: usize = 0;
@@ -442,10 +455,10 @@ fn validate_map_occur(
 }
 
 /// Validate a key-value pair against a mutable working map.
-fn validate_map_keyvalue(
+fn validate_map_keyvalue<'a>(
     kv: &KeyValue,
     working_map: &mut WorkingMap,
-    ctx: &Context,
+    ctx: &(dyn Context + 'a),
 ) -> ValidateResult {
     let key_node = &kv.key;
     let val_node = &kv.value;
@@ -460,7 +473,11 @@ fn validate_map_keyvalue(
     extracted_val.validate(val_node, ctx)
 }
 
-fn validate_standalone_group(g: &Group, value: &Value, ctx: &Context) -> ValidateResult {
+fn validate_standalone_group<'a>(
+    g: &Group,
+    value: &Value,
+    ctx: &(dyn Context + 'a),
+) -> ValidateResult {
     // Since we're not in an array or map context, it's not clear how we should
     // validate a group containing multiple elements.  If we see one, return an
     // error.

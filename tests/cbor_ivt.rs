@@ -1,5 +1,6 @@
 use cddl_validator::ivt::*;
 use cddl_validator::util::ValidateResult;
+use cddl_validator::context::{BasicContext, DummyContext};
 use serde::ser::Serialize;
 use serde_cbor::Value;
 use std::collections::HashMap;
@@ -22,7 +23,7 @@ impl TestValidate for Value {
     // Create a validation context and perform validation
     fn test_validate(&self, node: &Node) -> ValidateResult {
         // We don't need to do any Rule lookups, so an empty Context will do.
-        let ctx = Context::new(RulesByName::new());
+        let ctx = DummyContext::new();
         self.validate(node, &ctx)
     }
 }
@@ -124,7 +125,7 @@ fn validate_map() {
 fn validate_rule_ref() {
     let mut rules = RulesByName::new();
     rules.insert("seven".to_string(), LITERAL_7.clone());
-    let ctx = Context::new(rules);
+    let ctx = BasicContext::new(rules);
     let node2 = &Node::Rule(Rule::new("seven"));
     gen_value(7).validate(node2, &ctx).unwrap();
     gen_value(8).validate(node2, &ctx).unwrap_err();
