@@ -3,17 +3,6 @@
 //! This module is called "flatten" because its goal is to flatten syntax
 //! tree detail that's not useful for validation.
 //!
-//! For example, this CDDL description:
-//! ```text
-//! name_type = tstr
-//! name_group = (name: name_type)
-//! object = { name_group }
-//! ```
-//! is functionally identical to this "flattened" one:
-//! ```text
-//! object = { name: tstr }
-//! ```
-//!
 
 use crate::ivt::*;
 use crate::util::ValidateError;
@@ -37,74 +26,7 @@ pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
 pub fn flatten(ast: &CDDL) -> FlattenResult<RulesByName> {
     // This first pass generates a tree of Nodes from the AST.
     let rules: RulesByName = ast.rules.iter().map(|rule| flatten_rule(rule)).collect();
-    // This second pass adds Weak references for by-name rule references.
-    replace_rule_refs(&rules)?;
     Ok(rules)
-}
-
-// Descend recursively into a tree of Nodes, running a function against each.
-fn mutate_node_tree<F>(node: &Node, func: &mut F) -> MutateResult
-where
-    F: FnMut(&Node) -> MutateResult,
-{
-    // Apply the function first, then recurse.
-    func(node)?;
-    match node {
-        Node::Literal(_) => (),     // leaf node
-        Node::PreludeType(_) => (), // leaf node
-        Node::Rule(_) => (),        // leaf node
-        Node::Group(g) => {
-            for member in &g.members {
-                mutate_node_tree(member, func)?;
-            }
-        }
-        Node::Choice(c) => {
-            for option in &c.options {
-                mutate_node_tree(option, func)?;
-            }
-        }
-        Node::Map(m) => {
-            for member in &m.members {
-                mutate_node_tree(member, func)?;
-            }
-        }
-        Node::KeyValue(kv) => {
-            mutate_node_tree(&kv.key, func)?;
-            mutate_node_tree(&kv.value, func)?;
-        }
-        Node::Array(a) => {
-            for member in &a.members {
-                mutate_node_tree(member, func)?;
-            }
-        }
-        Node::Occur(o) => {
-            mutate_node_tree(&o.node, func)?;
-        }
-    }
-    Ok(())
-}
-
-fn replace_rule_refs(rules: &RulesByName) -> MutateResult {
-    /*
-    for root in rules.values() {
-        mutate_node_tree(root, &mut |node| {
-            match node {
-                Node::Rule(rule_ref) => {
-                    // FIXME: add graceful handling of nonexistent rule name
-                    let real_ref = rules.get(&rule_ref.name);
-                    if real_ref.is_none() {
-                        panic!("tried to access nonexistent rule '{}'", &rule_ref.name);
-                    }
-                    let real_ref = real_ref.unwrap();
-                    rule_ref.upgrade(real_ref);
-                }
-                _ => (),
-            }
-            Ok(())
-        })?;
-    }
-    */
-    Ok(())
 }
 
 /// flatten an ast::Rule to an ivt::Node
