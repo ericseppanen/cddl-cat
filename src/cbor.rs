@@ -50,8 +50,8 @@ impl WorkingArray {
 }
 
 /// The main entry point for validating CBOR data against an IVT.
-pub fn validate_cbor(node: &Node, value: &Value) -> ValidateResult {
-    value.validate(node)
+pub fn validate_cbor(node: &Node, value: &Value, ctx: &Context) -> ValidateResult {
+    value.validate(node, ctx)
 }
 
 pub fn validate_cbor_cddl_named(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResult {
@@ -67,7 +67,9 @@ pub fn validate_cbor_cddl_named(name: &str, cddl: &str, cbor: &[u8]) -> Validate
         ValidateError::Oops(msg)
     })?;
 
-    validate_cbor(rule_node, &cbor_value)
+    let ctx = Context::new();
+
+    validate_cbor(rule_node, &cbor_value, &ctx)
 }
 
 // Validate CBOR against a CDDL description.
@@ -85,22 +87,24 @@ pub fn validate_cbor_cddl(cddl: &str, cbor: &[u8]) -> ValidateResult {
     // but we'll fix that in a moment.
     let rule_node: &Node = flat_cddl.values().next().unwrap();
 
-    validate_cbor(rule_node, &cbor_value)
+    let ctx = Context::new();
+
+    validate_cbor(rule_node, &cbor_value, &ctx)
 }
 
 impl Validate<()> for Value {
     // This is the main validation dispatch function.
     // It tries to match a Node and a Value, recursing as needed.
-    fn validate(&self, node: &Node) -> ValidateResult {
+    fn validate(&self, node: &Node, ctx: &Context) -> ValidateResult {
         let value = self;
         match node {
             Node::Literal(l) => validate_literal(l, value),
             Node::PreludeType(p) => validate_prelude_type(p, value),
-            Node::Choice(c) => generic::validate_choice(c, value),
-            Node::Map(m) => validate_map(m, value),
-            Node::Array(a) => validate_array(a, value),
-            Node::Rule(r) => generic::validate_rule(r, value),
-            Node::Group(g) => validate_standalone_group(g, value),
+            Node::Choice(c) => generic::validate_choice(c, value, ctx),
+            Node::Map(m) => validate_map(m, value, ctx),
+            Node::Array(a) => validate_array(a, value, ctx),
+            Node::Rule(r) => generic::validate_rule(r, value, ctx),
+            Node::Group(g) => validate_standalone_group(g, value, ctx),
             Node::KeyValue(_) => unimplemented!(), // FIXME: can this even happen?
             Node::Occur(_) => panic!("reached Occur outside of array/map context"),
         }
@@ -111,11 +115,11 @@ impl Validate<Value> for WorkingMap {
     // Dispatch for handling Map key types.  This is specialized because
     // some keys (literal values) can be found with a fast search, while
     // others may require a linear search.
-    fn validate(&self, node: &Node) -> TempResult<Value> {
+    fn validate(&self, node: &Node, ctx: &Context) -> TempResult<Value> {
         let value_map = self;
         match node {
             Node::Literal(l) => map_search_literal(l, value_map),
-            _ => map_search(node, value_map),
+            _ => map_search(node, value_map, ctx),
         }
     }
 }
@@ -158,7 +162,7 @@ fn map_search_literal(literal: &Literal, working_map: &WorkingMap) -> TempResult
     }
 }
 
-fn map_search(node: &Node, working_map: &WorkingMap) -> TempResult<Value> {
+fn map_search(node: &Node, working_map: &WorkingMap, ctx: &Context) -> TempResult<Value> {
     // Iterate over each key in the working map, looking for a match.
     // If we find one, remove that key.
     // This is less efficient than map_search_literal.
@@ -169,7 +173,7 @@ fn map_search(node: &Node, working_map: &WorkingMap) -> TempResult<Value> {
 
     let mut working_mut = working_map.map.borrow_mut();
     for key in working_mut.keys() {
-        let attempt = key.validate(node);
+        let attempt = key.validate(node, ctx);
         match attempt {
             Ok(_) => {
                 // This key matches the node.  Remove the key and return success.
@@ -207,14 +211,14 @@ fn validate_prelude_type(ty: &PreludeType, value: &Value) -> ValidateResult {
 }
 
 // FIXME: should this be combined with Map handling?
-fn validate_array(ar: &Array, value: &Value) -> ValidateResult {
+fn validate_array(ar: &Array, value: &Value, ctx: &Context) -> ValidateResult {
     match value {
-        Value::Array(a) => validate_array_part2(ar, a),
+        Value::Array(a) => validate_array_part2(ar, a, ctx),
         _ => make_oops("expected array, found not-array"),
     }
 }
 
-fn validate_array_part2(ar: &Array, value_array: &Vec<Value>) -> ValidateResult {
+fn validate_array_part2(ar: &Array, value_array: &Vec<Value>, ctx: &Context) -> ValidateResult {
     // Strategy for validating an array:
     // 1. We assume that the code that constructed the IVT Array placed the
     //    members in matching order (literals first, more general types at the
@@ -235,7 +239,7 @@ fn validate_array_part2(ar: &Array, value_array: &Vec<Value>) -> ValidateResult 
     let mut working_array = WorkingArray::new(value_array);
 
     for member in &ar.members {
-        validate_array_member(member, &mut working_array)?;
+        validate_array_member(member, &mut working_array, ctx)?;
     }
     if working_array.array.into_inner().is_empty() {
         Ok(())
@@ -246,16 +250,20 @@ fn validate_array_part2(ar: &Array, value_array: &Vec<Value>) -> ValidateResult 
     }
 }
 
-fn validate_array_member(member: &ArcNode, working_array: &mut WorkingArray) -> ValidateResult {
-    match member.as_ref() {
+fn validate_array_member(
+    member: &Node,
+    working_array: &mut WorkingArray,
+    ctx: &Context,
+) -> ValidateResult {
+    match member {
         // FIXME: does it make sense for this to destructure & dispatch
         // each Node type here?  Is there any way to make this generic?
-        Node::Occur(o) => validate_array_occur(o, working_array),
+        Node::Occur(o) => validate_array_occur(o, working_array, ctx),
         Node::KeyValue(kv) => {
             // The key is ignored.  Validate the value only.
             // FIXME: should we try to use the key to provide a more
             // useful error message?
-            validate_array_value(&kv.value, working_array)
+            validate_array_value(&kv.value, working_array, ctx)
         }
         Node::Rule(r) => {
             // FIXME: This seems like a gross hack.  We need to dereference
@@ -264,33 +272,34 @@ fn validate_array_member(member: &ArcNode, working_array: &mut WorkingArray) -> 
             // through" KeyValue and Group nodes while remembering that we are
             // in an array context (with a particular working copy).
             // BUG: Choice nodes will have the same problem.
-            let next_node = &r
-                .get_ref()
-                .unwrap_or_else(|| panic!("Rule {} lookup failed", r.name));
-
-            validate_array_member(next_node, working_array)
+            let next_node = ctx.lookup_rule(&r.name);
+            validate_array_member(next_node, working_array, ctx)
         }
         Node::Group(g) => {
             // Recurse into each member of the group.
             for group_member in &g.members {
                 // Exit early if we hit an error.
-                validate_array_member(group_member, working_array)?;
+                validate_array_member(group_member, working_array, ctx)?;
             }
             // All group members validated Ok.
             Ok(())
         }
-        m => validate_array_value(m, working_array),
+        m => validate_array_value(m, working_array, ctx),
     }
 }
 
 /// Validate an occurrence against a mutable working array.
 // FIXME: this is pretty similar to validate_map_occur; maybe they can be combined?
-fn validate_array_occur(occur: &Occur, working_map: &mut WorkingArray) -> ValidateResult {
+fn validate_array_occur(
+    occur: &Occur,
+    working_map: &mut WorkingArray,
+    ctx: &Context,
+) -> ValidateResult {
     let (lower_limit, upper_limit) = occur.limits();
     let mut count: usize = 0;
 
     loop {
-        match validate_array_value(&occur.node, working_map) {
+        match validate_array_value(&occur.node, working_map, ctx) {
             Ok(_) => (),
             Err(_) => break,
         }
@@ -307,11 +316,15 @@ fn validate_array_occur(occur: &Occur, working_map: &mut WorkingArray) -> Valida
 }
 
 /// Validate a key-value pair against a mutable working array.
-fn validate_array_value(node: &Node, working_array: &mut WorkingArray) -> ValidateResult {
+fn validate_array_value(
+    node: &Node,
+    working_array: &mut WorkingArray,
+    ctx: &Context,
+) -> ValidateResult {
     let mut working = working_array.array.borrow_mut();
     match working.front() {
         Some(val) => {
-            val.validate(node)?;
+            val.validate(node, ctx)?;
             // We had a successful match; remove the matched value.
             working.pop_front();
             Ok(())
@@ -320,14 +333,14 @@ fn validate_array_value(node: &Node, working_array: &mut WorkingArray) -> Valida
     }
 }
 
-fn validate_map(m: &Map, value: &Value) -> ValidateResult {
+fn validate_map(m: &Map, value: &Value, ctx: &Context) -> ValidateResult {
     match value {
-        Value::Map(vm) => validate_map_part2(m, vm),
+        Value::Map(vm) => validate_map_part2(m, vm, ctx),
         _ => make_oops("expected map, found not-a-map"),
     }
 }
 
-fn validate_map_part2(m: &Map, value_map: &ValueMap) -> ValidateResult {
+fn validate_map_part2(m: &Map, value_map: &ValueMap, ctx: &Context) -> ValidateResult {
     // Strategy for validating a map:
     // 1. We assume that the code that constructed the IVT Map placed the keys
     //    in matching order (literals first, more general types at the end) so
@@ -346,7 +359,7 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap) -> ValidateResult {
     let mut working_map = WorkingMap::new(value_map);
 
     for member in &m.members {
-        validate_map_member(member, &mut working_map)?;
+        validate_map_member(member, &mut working_map, ctx)?;
     }
     if working_map.map.into_inner().is_empty() {
         Ok(())
@@ -357,27 +370,29 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap) -> ValidateResult {
     }
 }
 
-fn validate_map_member(member: &ArcNode, working_map: &mut WorkingMap) -> ValidateResult {
-    match member.as_ref() {
+fn validate_map_member(
+    member: &Node,
+    working_map: &mut WorkingMap,
+    ctx: &Context,
+) -> ValidateResult {
+    match member {
         // FIXME: does it make sense for this to destructure & dispatch
         // each Node type here?  Is there any way to make this generic?
-        Node::Occur(o) => validate_map_occur(o, working_map),
-        Node::KeyValue(kv) => validate_map_keyvalue(kv, working_map),
+        Node::Occur(o) => validate_map_occur(o, working_map, ctx),
+        Node::KeyValue(kv) => validate_map_keyvalue(kv, working_map, ctx),
         Node::Rule(r) => {
             // NOTE!  validate() on a WorkingMap returns a Value (the result of a key-value lookup)
             //
             // So we can't use generic::validate() here.  We need to punch down
             // a level into the rule and match again.
-            let next_node = &r
-                .get_ref()
-                .unwrap_or_else(|| panic!("Rule {} lookup failed", r.name));
-            validate_map_member(next_node, working_map)
+            let next_node = ctx.lookup_rule(&r.name);
+            validate_map_member(next_node, working_map, ctx)
         }
         Node::Group(g) => {
             // Recurse into each member of the group.
             for group_member in &g.members {
                 // Exit early if we hit an error.
-                validate_map_member(group_member, working_map)?;
+                validate_map_member(group_member, working_map, ctx)?;
             }
             // All group members validated Ok.
             Ok(())
@@ -389,7 +404,7 @@ fn validate_map_member(member: &ArcNode, working_map: &mut WorkingMap) -> Valida
             // any changes.  Need a unit test to test this behavior.
             // Recurse into each member of the group.
             for option in &c.options {
-                if let Ok(()) = validate_map_member(option, working_map) {
+                if let Ok(()) = validate_map_member(option, working_map, ctx) {
                     return Ok(());
                 }
             }
@@ -401,12 +416,16 @@ fn validate_map_member(member: &ArcNode, working_map: &mut WorkingMap) -> Valida
 }
 
 /// Validate an occurrence against a mutable working map.
-fn validate_map_occur(occur: &Occur, working_map: &mut WorkingMap) -> ValidateResult {
+fn validate_map_occur(
+    occur: &Occur,
+    working_map: &mut WorkingMap,
+    ctx: &Context,
+) -> ValidateResult {
     let (lower_limit, upper_limit) = occur.limits();
     let mut count: usize = 0;
 
     loop {
-        match validate_map_member(&occur.node, working_map) {
+        match validate_map_member(&occur.node, working_map, ctx) {
             Ok(_) => (),
             Err(_) => break,
         }
@@ -423,28 +442,32 @@ fn validate_map_occur(occur: &Occur, working_map: &mut WorkingMap) -> ValidateRe
 }
 
 /// Validate a key-value pair against a mutable working map.
-fn validate_map_keyvalue(kv: &KeyValue, working_map: &mut WorkingMap) -> ValidateResult {
-    let key_node = kv.key.as_ref();
-    let val_node: &Node = kv.value.as_ref();
+fn validate_map_keyvalue(
+    kv: &KeyValue,
+    working_map: &mut WorkingMap,
+    ctx: &Context,
+) -> ValidateResult {
+    let key_node = &kv.key;
+    let val_node = &kv.value;
 
     // This is using WorkingMap::Validate, which returns a Value.
     // A successful key match has the side-effect of removing that key from
     // the working map (and returning its value to us.)
     // If we fail to validate a key, exit now with an error.
-    let extracted_val: Value = working_map.validate(key_node)?;
+    let extracted_val: Value = working_map.validate(key_node, ctx)?;
 
     // Match the value that was returned.
-    extracted_val.validate(val_node)
+    extracted_val.validate(val_node, ctx)
 }
 
-fn validate_standalone_group(g: &Group, value: &Value) -> ValidateResult {
+fn validate_standalone_group(g: &Group, value: &Value, ctx: &Context) -> ValidateResult {
     // Since we're not in an array or map context, it's not clear how we should
     // validate a group containing multiple elements.  If we see one, return an
     // error.
     match g.members.len() {
         1 => {
             // Since our group has length 1, validate against that single element.
-            value.validate(&g.members[0])
+            value.validate(&g.members[0], ctx)
         }
         _ => make_oops(&format!("can't validate complex standalone group {:?}", g)),
     }

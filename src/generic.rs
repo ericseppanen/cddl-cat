@@ -1,15 +1,18 @@
 //! This module contains generic validation helper functions.
 
-use crate::ivt::{Choice, Node, Rule, Validate};
+use crate::ivt::{Choice, Context, Rule, Validate};
 use crate::util::*;
 
 /// Validate a `Choice` containing an arbitrary number of "option" nodes.
 ///
 /// If any of the options matches, this validation is successful.
-pub fn validate_choice<T, V: Validate<T>>(choice: &Choice, value: &V) -> TempResult<T> {
+pub fn validate_choice<T, V: Validate<T>>(
+    choice: &Choice,
+    value: &V,
+    ctx: &Context,
+) -> TempResult<T> {
     for node in &choice.options {
-        let node: &Node = node.as_ref();
-        if let Ok(result) = value.validate(node) {
+        if let Ok(result) = value.validate(node, ctx) {
             return Ok(result);
         }
     }
@@ -19,7 +22,7 @@ pub fn validate_choice<T, V: Validate<T>>(choice: &Choice, value: &V) -> TempRes
 /// Validate a `Rule` reference
 ///
 /// This just falls through to the referenced `Node`.
-pub fn validate_rule<T, V: Validate<T>>(rule: &Rule, value: &V) -> TempResult<T> {
-    let node = rule.get_ref().unwrap();
-    value.validate(&node)
+pub fn validate_rule<T, V: Validate<T>>(rule: &Rule, value: &V, ctx: &Context) -> TempResult<T> {
+    let node = ctx.lookup_rule(&rule.name);
+    value.validate(&node, ctx)
 }

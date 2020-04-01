@@ -21,13 +21,12 @@ use cddl::ast::{self, CDDL};
 use cddl::parser::cddl_from_str;
 use hex;
 use std::collections::BTreeMap;
-use std::sync::Arc;
 
 pub type FlattenResult<T> = std::result::Result<T, ValidateError>;
 
 pub type MutateResult = std::result::Result<(), ValidateError>;
 
-pub type RulesByName = BTreeMap<String, ArcNode>;
+pub type RulesByName = BTreeMap<String, Node>;
 
 pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
     let cddl = cddl_from_str(cddl_input).map_err(|e| {
@@ -59,36 +58,37 @@ where
         Node::Rule(_) => (),        // leaf node
         Node::Group(g) => {
             for member in &g.members {
-                mutate_node_tree(member.as_ref(), func)?;
+                mutate_node_tree(member, func)?;
             }
         }
         Node::Choice(c) => {
             for option in &c.options {
-                mutate_node_tree(option.as_ref(), func)?;
+                mutate_node_tree(option, func)?;
             }
         }
         Node::Map(m) => {
             for member in &m.members {
-                mutate_node_tree(member.as_ref(), func)?;
+                mutate_node_tree(member, func)?;
             }
         }
         Node::KeyValue(kv) => {
-            mutate_node_tree(kv.key.as_ref(), func)?;
-            mutate_node_tree(kv.value.as_ref(), func)?;
+            mutate_node_tree(&kv.key, func)?;
+            mutate_node_tree(&kv.value, func)?;
         }
         Node::Array(a) => {
             for member in &a.members {
-                mutate_node_tree(member.as_ref(), func)?;
+                mutate_node_tree(member, func)?;
             }
         }
         Node::Occur(o) => {
-            mutate_node_tree(o.node.as_ref(), func)?;
+            mutate_node_tree(&o.node, func)?;
         }
     }
     Ok(())
 }
 
 fn replace_rule_refs(rules: &RulesByName) -> MutateResult {
+    /*
     for root in rules.values() {
         mutate_node_tree(root, &mut |node| {
             match node {
@@ -106,6 +106,7 @@ fn replace_rule_refs(rules: &RulesByName) -> MutateResult {
             Ok(())
         })?;
     }
+    */
     Ok(())
 }
 
@@ -113,12 +114,12 @@ fn replace_rule_refs(rules: &RulesByName) -> MutateResult {
 ///
 /// Returns (name, node) where the name is the name of the rule (which may
 /// be referenced in other places.
-fn flatten_rule(rule: &ast::Rule) -> (String, ArcNode) {
+fn flatten_rule(rule: &ast::Rule) -> (String, Node) {
     let (name, node) = match rule {
         ast::Rule::Type { rule, .. } => flatten_typerule(rule),
         ast::Rule::Group { rule, .. } => flatten_grouprule(rule),
     };
-    (name, Arc::new(node))
+    (name, node)
 }
 
 // returns (name, node) just like flatten_rule()
@@ -148,11 +149,7 @@ fn flatten_type(ty: &ast::Type) -> Node {
     match options.len() {
         0 => panic!("flatten type with 0 options"),
         1 => options.drain(..).next().unwrap(), // FIXME: awkward
-        _ => {
-            // FIXME: these gymnastics around Arc<Node> vs Node need to go away.
-            let arced: VecNode = options.drain(..).map(|op| Arc::new(op)).collect();
-            Node::Choice(Choice { options: arced })
-        }
+        _ => Node::Choice(Choice { options }),
     }
 }
 
@@ -224,12 +221,12 @@ fn flatten_group(group: &ast::Group) -> VecNode {
             .iter()
             .map(|gc| {
                 let inner_members = flatten_groupchoice(gc);
-                Arc::new(Node::Group(Group {
+                Node::Group(Group {
                     members: inner_members,
-                }))
+                })
             })
             .collect();
-        vec![Arc::new(Node::Choice(Choice { options }))]
+        vec![Node::Choice(Choice { options })]
     }
 }
 
@@ -239,7 +236,7 @@ fn flatten_groupchoice(groupchoice: &ast::GroupChoice) -> VecNode {
         .iter()
         .map(|ge_tuple| {
             let group_entry = &ge_tuple.0;
-            Arc::new(flatten_groupentry(group_entry))
+            flatten_groupentry(group_entry)
         })
         .collect();
     kvs
