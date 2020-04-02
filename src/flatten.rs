@@ -11,6 +11,7 @@ use cddl::ast::{self, CDDL};
 use cddl::parser::cddl_from_str;
 use hex;
 use std::collections::BTreeMap;
+use std::convert::TryInto;
 
 // The type used to return a {name: rule} tree
 type RulesByName = BTreeMap<String, Node>;
@@ -86,17 +87,18 @@ fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
 fn flatten_type2(ty2: &ast::Type2) -> FlattenResult<Node> {
     use ast::Type2;
     match ty2 {
-        // FIXME: this casting is gross.
-        Type2::UintValue { value, .. } => Ok(Node::Literal(Literal::Int(*value as i128))),
-        Type2::TextValue { value, .. } => Ok(Node::Literal(Literal::Text(value.clone()))),
-        Type2::FloatValue { value, .. } => Ok(Node::Literal(Literal::Float(*value))),
+        Type2::UintValue { value, .. } => {
+            let value = num_to_i128(*value)?;
+            Ok(literal_int(value))
+        }
+        Type2::TextValue { value, .. } => Ok(literal_text(value)),
+        Type2::FloatValue { value, .. } => Ok(literal_float(*value)),
         Type2::Typename { ident, .. } => flatten_typename(&ident.ident),
         Type2::Map { group, .. } => flatten_map(&group),
         Type2::Array { group, .. } => flatten_array(&group),
         Type2::B16ByteString { value, .. } => {
             // Maybe hex decode belongs in the CDDL parser instead?
-            let bytes = bytes_from_hex(value)?;
-            Ok(Node::Literal(Literal::Bytes(bytes)))
+            Ok(literal_bytes(bytes_from_hex(value)?))
         }
         Type2::ParenthesizedType { pt, .. } => flatten_type(pt),
         _ => make_oops("unimplemented Type2 variant"),
@@ -107,8 +109,8 @@ fn flatten_typename(name: &str) -> FlattenResult<Node> {
     let result = match name {
         "any" => Node::PreludeType(PreludeType::Any),
         "bool" => Node::PreludeType(PreludeType::Bool),
-        "false" => Node::Literal(Literal::Bool(false)),
-        "true" => Node::Literal(Literal::Bool(true)),
+        "false" => literal_bool(false),
+        "true" => literal_bool(true),
         "int" => Node::PreludeType(PreludeType::Int),
         "uint" => Node::PreludeType(PreludeType::Uint),
         "float" => Node::PreludeType(PreludeType::Float),
@@ -240,8 +242,18 @@ fn flatten_vmke(vmke: &ast::ValueMemberKeyEntry) -> FlattenResult<Node> {
     Ok(occur_wrap(&vmke.occur, node))
 }
 
+// hex::decode, remapping the error.
+// FIXME: maybe implementing From<FromHexError> for ValidateError would be better.
 fn bytes_from_hex<T: AsRef<[u8]>>(data: T) -> FlattenResult<Vec<u8>> {
     hex::decode(data).map_err(|_| ValidateError::Oops("bad hex literal".to_string()))
+}
+
+// try_into(), remapping the error.
+fn num_to_i128<T: TryInto<i128>>(n: T) -> FlattenResult<i128> {
+    // This error doesn't seem possible, since isize and usize should always
+    // fit into an i128.
+    n.try_into()
+        .map_err(|_| ValidateError::Oops("try_into<i128> failed".to_string()))
 }
 
 // FIXME: it seems weird to me that cddl::ast::MemberKey::Value includes a
@@ -250,18 +262,20 @@ fn bytes_from_hex<T: AsRef<[u8]>>(data: T) -> FlattenResult<Vec<u8>> {
 fn translate_token_value(v: &cddl::token::Value) -> FlattenResult<Node> {
     use cddl::token::Value;
     let result = match v {
-        Value::INT(i) => Node::Literal(Literal::Int(*i as i128)),
-        Value::UINT(u) => Node::Literal(Literal::Int(*u as i128)),
-        Value::FLOAT(f) => Node::Literal(Literal::Float(*f)),
-        Value::TEXT(s) => Node::Literal(Literal::Text(s.clone())),
+        Value::INT(i) => {
+            let i = num_to_i128(*i)?;
+            literal_int(i)
+        }
+        Value::UINT(u) => {
+            let u = num_to_i128(*u)?;
+            literal_int(u)
+        }
+        Value::FLOAT(f) => literal_float(*f),
+        Value::TEXT(s) => literal_text(s),
         Value::BYTE(b) => {
             use cddl::token::ByteValue;
             match b {
-                ByteValue::B16(encoded) => {
-                    // FIXME: return an error on bad hex decode.
-                    let bytes = bytes_from_hex(encoded)?;
-                    Node::Literal(Literal::Bytes(bytes))
-                }
+                ByteValue::B16(encoded) => literal_bytes(bytes_from_hex(encoded)?),
                 // FIXME: UTF8 and Base64 variants
                 _ => return make_oops("unhandled token::ByteValue"),
             }
@@ -277,7 +291,7 @@ fn flatten_memberkey(memberkey: &ast::MemberKey) -> FlattenResult<Node> {
             // A "bareword" is just a literal string used in the context
             // of a map key.
             let name = ident.ident.clone();
-            Ok(Node::Literal(Literal::Text(name)))
+            Ok(literal_text(name))
         }
         // FIXME: handle cut
         MemberKey::Type1 { t1, .. } => flatten_type1(t1.as_ref()),

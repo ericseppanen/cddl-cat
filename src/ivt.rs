@@ -39,6 +39,33 @@ pub enum Literal {
     // TODO: nil?
 }
 
+/// A shortcut for `Node::Literal(Literal::Bool(b))`
+pub fn literal_bool(b: bool) -> Node {
+    Node::Literal(Literal::Bool(b))
+}
+
+/// A shortcut for `Node::Literal(Literal::Int(i))`
+///
+/// This doesn't work for isize and usize, unfortunately.
+pub fn literal_int<T: Into<i128>>(i: T) -> Node {
+    Node::Literal(Literal::Int(i.into()))
+}
+
+/// A shortcut for `Node::Literal(Literal::Float(f))`
+pub fn literal_float<T: Into<f64>>(f: T) -> Node {
+    Node::Literal(Literal::Float(f.into()))
+}
+
+/// A shortcut for `Node::Literal(Literal::Text(t))`
+pub fn literal_text<T: Into<String>>(s: T) -> Node {
+    Node::Literal(Literal::Text(s.into()))
+}
+
+/// A shortcut for `Node::Literal(Literal::Bytes(b))`
+pub fn literal_bytes<T: Into<Vec<u8>>>(b: T) -> Node {
+    Node::Literal(Literal::Bytes(b.into()))
+}
+
 /// A rule reference, linked to a dispatch object for later resolution.
 #[derive(Debug, Clone)]
 #[allow(missing_docs)]

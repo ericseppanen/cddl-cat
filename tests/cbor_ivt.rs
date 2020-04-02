@@ -52,7 +52,7 @@ fn validate_literal_int() {
 
 #[test]
 fn validate_literal_text() {
-    let node = &Node::Literal(Literal::Text("abc".to_string()));
+    let node = &literal_text("abc");
     Value::Text("abc".to_string()).test_validate(node).unwrap();
     Value::Integer(8).test_validate(node).unwrap_err();
 }
@@ -62,7 +62,7 @@ fn validate_choice() {
     let options = vec![1, 2, 3];
     let options = options
         .iter()
-        .map(|n| Node::Literal(Literal::Int(*n)))
+        .map(|n| literal_int(*n))
         .collect();
     let node = &Node::Choice(Choice { options });
 
@@ -83,10 +83,8 @@ fn validate_map() {
     let kv_vec: Vec<Node> = kv_template
         .iter()
         .map(|kv| {
-            let key = kv.0;
-            let key = Node::Literal(Literal::Text(key.to_string()));
-            let value = kv.1;
-            let value = Node::PreludeType(value);
+            let key = literal_text(kv.0);
+            let value = Node::PreludeType(kv.1);
             Node::KeyValue(KeyValue::new(key, value))
         })
         .collect();
