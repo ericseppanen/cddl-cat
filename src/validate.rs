@@ -53,8 +53,8 @@ pub(crate) fn validate(value: &Value, node: &Node, ctx: &dyn Context) -> Validat
         Node::Array(a) => validate_array(a, value, ctx),
         Node::Rule(r) => validate_rule(r, value, ctx),
         Node::Group(g) => validate_standalone_group(g, value, ctx),
-        Node::KeyValue(_) => unimplemented!(), // FIXME: can this even happen?
-        Node::Occur(_) => panic!("reached Occur outside of array/map context"),
+        Node::KeyValue(_) => make_oops("unexpected KeyValue"),
+        Node::Occur(_) => make_oops("unexpected Occur"),
     }
 }
 
@@ -376,7 +376,7 @@ fn validate_map_member(
             // None of the choices worked.
             make_oops("map choice failure")
         }
-        _ => panic!("unhandled map member {:?}", member),
+        _ => make_oops("unhandled map member"),
     }
 }
 
