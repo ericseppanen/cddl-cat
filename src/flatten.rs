@@ -3,6 +3,7 @@
 //! This module is called "flatten" because its goal is to flatten syntax
 //! tree detail that's not useful for validation.
 //!
+//! [`ivt`]: crate::ivt
 
 use crate::ivt::*;
 use crate::util::ValidateError;
