@@ -6,18 +6,19 @@
 //! This module doesn't know anything about validating specific types (e.g.
 //! CBOR or JSON), but it helps make writing those validators easier.
 
-use std::collections::BTreeMap;
 use std::fmt;
 
-pub type RulesByName = BTreeMap<String, Node>;
-
-// Some useful type shortcuts
-pub type VecNode = Vec<Node>;
-
 /// One of the types named in the CDDL prelude.
+///
+/// The following types are defined in [RFC8610 appendix D]:
+/// `any`, `bool`, `int`, `uint`, `float`, `tstr`, `bstr`.
+/// There are more that aren't supported by this crate yet.
+///
+/// [RFC8610 appendix D]: https://tools.ietf.org/html/rfc8610#appendix-D
 #[derive(Debug, Copy, Clone)]
+#[allow(missing_docs)]
 pub enum PreludeType {
-    Any, // Not really a prelude type, but it's easy to handle here.
+    Any,
     Bool,
     Int,
     Uint,
@@ -28,6 +29,7 @@ pub enum PreludeType {
 
 /// A literal value, e.g. `7`, `1.3`, or ``"foo"``.
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub enum Literal {
     Bool(bool),
     Int(i128),
@@ -37,8 +39,9 @@ pub enum Literal {
     // TODO: nil?
 }
 
-/// A rule reference, linked to a dispatch object for later resolution
+/// A rule reference, linked to a dispatch object for later resolution.
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub struct Rule {
     pub name: String,
     // Resolving the rule reference is handled by the validation context.
@@ -46,6 +49,7 @@ pub struct Rule {
 
 impl Rule {
     // Create a new rule reference by name
+    #[doc(hidden)] // Only pub for integration tests
     pub fn new(name: &str) -> Rule {
         Rule {
             name: name.to_string(),
@@ -55,18 +59,21 @@ impl Rule {
 
 /// A Choice validates if any one of a set of options validates.
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub struct Choice {
-    pub options: VecNode,
+    pub options: Vec<Node>,
 }
 
 /// A key-value pair; key and value can be anything (types, arrays, maps, etc.)
 #[derive(Clone)]
+#[allow(missing_docs)]
 pub struct KeyValue {
     pub key: Box<Node>,
     pub value: Box<Node>,
 }
 
 impl KeyValue {
+    #[doc(hidden)] // Only pub for integration tests
     pub fn new(key: Node, value: Node) -> KeyValue {
         KeyValue {
             key: Box::new(key),
@@ -83,7 +90,22 @@ impl fmt::Debug for KeyValue {
     }
 }
 
+/// Specify a CDDL occurrence's limits.
+///
+/// An "occurrence" in CDDL specifies how many times a value should repeat
+/// (in an array) or flag optional map keys.  [RFC8610] specifies the following
+/// occurrence symbols:
+/// ```text
+/// "?" Optional
+/// "*" Zero or more
+/// "+" One or more
+/// n*m Between n and m, inclusive (n and m are both optional)
+/// ```
+///
+/// [RFC8610]: https://tools.ietf.org/html/rfc8610
+
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub enum OccurLimit {
     Optional,
     ZeroOrMore,
@@ -93,7 +115,10 @@ pub enum OccurLimit {
 
 /// Occurences specify how many times a value can appear.
 ///
+/// This implementation wraps the Node that the occurrence applies to.
+
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub struct Occur {
     pub limit: OccurLimit,
     pub node: Box<Node>,
@@ -129,14 +154,16 @@ impl Occur {
 
 /// A map containing key-value pairs.
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub struct Map {
-    pub members: VecNode,
+    pub members: Vec<Node>,
 }
 
 /// A context-free group of key-value pairs.
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub struct Group {
-    pub members: VecNode,
+    pub members: Vec<Node>,
 }
 
 /// An array is a list of types in a specific order.
@@ -169,20 +196,22 @@ pub struct Group {
 /// for information/debugging; they are ignored for validation purposes.
 ///
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub struct Array {
-    pub members: VecNode,
+    pub members: Vec<Node>,
 }
 
 /// Any node in the Intermediate Validation Tree.
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub enum Node {
     Literal(Literal),
     PreludeType(PreludeType),
-    Rule(Rule), // FIXME: NameRef
+    Rule(Rule),
     Choice(Choice),
     Map(Map),
     Array(Array),
-    Group(Group), // FIXME: NameRef
+    Group(Group),
     KeyValue(KeyValue),
     Occur(Occur),
 }

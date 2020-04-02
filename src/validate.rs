@@ -11,6 +11,9 @@ use std::collections::VecDeque;
 
 type ValueMap = BTreeMap<Value, Value>;
 
+// A Result that returns some temporary value.
+type TempResult<T> = Result<T, ValidateError>;
+
 /// This struct allows us to maintain a map that is consumed during validation.
 struct WorkingMap {
     map: ValueMap,

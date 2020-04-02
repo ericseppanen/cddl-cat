@@ -1,9 +1,8 @@
 //! This module declares a generic Value enum for use with validation.
 
-use std::collections::BTreeMap;
 use float_ord::FloatOrd;
+use std::collections::BTreeMap;
 use std::fmt;
-
 
 /// `Value` represents all the types of data we can validate.
 ///
@@ -13,6 +12,7 @@ use std::fmt;
 /// [`cbor`]: crate::cbor
 ///
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
+#[allow(missing_docs)]
 pub enum Value {
     Null,
     Bool(bool),
@@ -40,10 +40,9 @@ impl fmt::Debug for Value {
     }
 }
 
-
 // Only exists so implementers don't need to use/see float_ord::FloatOrd
 impl Value {
-    pub fn from_float<F: Into<f64>>(f: F) -> Value {
+    pub(crate) fn from_float<F: Into<f64>>(f: F) -> Value {
         Value::Float(FloatOrd(f.into()))
     }
 }

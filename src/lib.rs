@@ -28,8 +28,10 @@
 //! [`Choice`]: ivt::Choice
 //! [`Arc`]: std::sync::Arc
 
+#![warn(missing_docs)]
+
 pub mod cbor;
-pub mod validate;
+pub(crate) mod validate;
 pub mod flatten;
 pub mod ivt;
 pub mod util;

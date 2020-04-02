@@ -10,11 +10,15 @@ use crate::util::ValidateError;
 use cddl::ast::{self, CDDL};
 use cddl::parser::cddl_from_str;
 use hex;
+use std::collections::BTreeMap;
 
+// The type used to return a {name: rule} tree
+type RulesByName = BTreeMap<String, Node>;
+
+/// The result of a flatten operation.
 pub type FlattenResult<T> = std::result::Result<T, ValidateError>;
 
-pub type MutateResult = std::result::Result<(), ValidateError>;
-
+/// Convert a CDDL schema in UTF-8 form into a (name, rules) map.
 pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
     let cddl = cddl_from_str(cddl_input).map_err(|e| {
         // FIXME: don't throw away the original error
@@ -24,6 +28,7 @@ pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
     flatten(&cddl)
 }
 
+/// Convert an already-parsed cddl AST into a (name, rules) map.
 pub fn flatten(ast: &CDDL) -> FlattenResult<RulesByName> {
     // This first pass generates a tree of Nodes from the AST.
     let rules: RulesByName = ast.rules.iter().map(|rule| flatten_rule(rule)).collect();
@@ -130,13 +135,13 @@ fn flatten_array(group: &ast::Group) -> Node {
 }
 
 // Returns an ivt::Group node, or a vector of other nodes.
-fn flatten_group(group: &ast::Group) -> VecNode {
+fn flatten_group(group: &ast::Group) -> Vec<Node> {
     if group.group_choices.len() == 1 {
         let groupchoice = &group.group_choices[0];
         flatten_groupchoice(groupchoice)
     } else {
         // Emit a Choice node, containing a vector of Group nodes.
-        let options: VecNode = group
+        let options: Vec<Node> = group
             .group_choices
             .iter()
             .map(|gc| {
@@ -150,8 +155,8 @@ fn flatten_group(group: &ast::Group) -> VecNode {
     }
 }
 
-fn flatten_groupchoice(groupchoice: &ast::GroupChoice) -> VecNode {
-    let kvs: VecNode = groupchoice
+fn flatten_groupchoice(groupchoice: &ast::GroupChoice) -> Vec<Node> {
+    let kvs: Vec<Node> = groupchoice
         .group_entries
         .iter()
         .map(|ge_tuple| {

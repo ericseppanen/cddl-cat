@@ -3,9 +3,11 @@
 
 use std::error;
 use std::fmt;
+use std::result::Result;
 
 /// A basic error type that contains a string.
 #[derive(Debug, Clone)]
+#[allow(missing_docs)]
 pub enum ValidateError {
     Oops(String),
 }
@@ -29,14 +31,9 @@ impl error::Error for ValidateError {
 ///
 /// This crate doesn't generate useful errors yet.  This is a simple substitute until
 /// it does.
-pub fn make_oops<T>(msg: &str) -> TempResult<T> {
+pub(crate) fn make_oops<T>(msg: &str) -> Result<T, ValidateError> {
     Err(ValidateError::Oops(msg.into()))
 }
 
-/// A Result that returns some temporary value.
-///
-/// This is used when validating a map key and the map value should be returned.
-pub type TempResult<T> = std::result::Result<T, ValidateError>;
-
 /// A validation that doesn't return anything.
-pub type ValidateResult = TempResult<()>;
+pub type ValidateResult = Result<(), ValidateError>;

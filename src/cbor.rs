@@ -1,13 +1,13 @@
 //! This module implements conversions from [`serde_cbor::Value`].
 //!
-//! Validation of data requires converting data to a generic type [`Value`]
+//! Validation of data requires converting data to a generic type [`Value`].
 
-use crate::context::{Context, BasicContext};
-use crate::value::Value;
-use crate::util::{ValidateError, ValidateResult};
+use crate::context::{BasicContext, Context};
 use crate::flatten::flatten_from_str;
 use crate::ivt::Node;
+use crate::util::{ValidateError, ValidateResult};
 use crate::validate::validate;
+use crate::value::Value;
 use serde_cbor::Value as CBOR_Value;
 
 // These conversions seem obvious and pointless, but over time they may
@@ -33,7 +33,7 @@ impl From<&CBOR_Value> for Value {
                     .collect();
                 Value::Map(map)
             }
-            _ => panic!("can't handle hidden cbor Value")
+            _ => panic!("can't handle hidden cbor Value"),
         }
     }
 }
@@ -45,12 +45,13 @@ impl From<CBOR_Value> for Value {
     }
 }
 
+/// Validate already-parsed CBOR data against an already-parsed CDDL schema.
 pub fn validate_cbor(node: &Node, value: &CBOR_Value, ctx: &dyn Context) -> ValidateResult {
     let value = Value::from(value);
     validate(&value, node, ctx)
 }
 
-/// Validate CBOR-encoded data against a specified rule in a text CDDL schema.
+/// Validate CBOR-encoded data against a specified rule in a UTF-8 CDDL schema.
 pub fn validate_cbor_bytes(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResult {
     // Parse the CDDL text and flatten it into IVT form.
     let flat_cddl = flatten_from_str(cddl)?;

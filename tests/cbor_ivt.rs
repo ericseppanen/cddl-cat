@@ -1,7 +1,7 @@
+use cddl_validator::cbor::validate_cbor;
+use cddl_validator::context::{tests::DummyContext, BasicContext, RulesByName};
 use cddl_validator::ivt::*;
 use cddl_validator::util::ValidateResult;
-use cddl_validator::context::{BasicContext, DummyContext};
-use cddl_validator::cbor::validate_cbor;
 use serde::ser::Serialize;
 use serde_cbor::Value;
 use std::collections::HashMap;
@@ -80,7 +80,7 @@ fn validate_map() {
         ("Bob", PreludeType::Int),
         ("Carol", PreludeType::Int),
     ];
-    let kv_vec: VecNode = kv_template
+    let kv_vec: Vec<Node> = kv_template
         .iter()
         .map(|kv| {
             let key = kv.0;
