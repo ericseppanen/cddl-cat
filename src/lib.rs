@@ -29,9 +29,9 @@
 //! [`Arc`]: std::sync::Arc
 
 pub mod cbor;
+pub mod validate;
 pub mod flatten;
 pub mod ivt;
 pub mod util;
 pub mod context;
-
-pub use cbor::validate_cbor;
+pub mod value;

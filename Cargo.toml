@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 cddl = { path = "../cddl_stable" }
+float-ord = "0.2"
 hex = "0.4"
 serde_cbor = "0.11"
 serde = "1.0"
