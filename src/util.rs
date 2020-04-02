@@ -8,6 +8,7 @@ use std::result::Result;
 /// A basic error type that contains a string.
 #[derive(Debug, Clone)]
 #[allow(missing_docs)]
+#[non_exhaustive]
 pub enum ValidateError {
     Oops(String),
 }
