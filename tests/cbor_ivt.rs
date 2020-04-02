@@ -25,7 +25,7 @@ impl TestValidate for Value {
     fn test_validate(&self, node: &Node) -> ValidateResult {
         // We don't need to do any Rule lookups, so an empty Context will do.
         let ctx = DummyContext::new();
-        validate_cbor(self, node, &ctx)
+        validate_cbor(node, self, &ctx)
     }
 }
 
@@ -128,6 +128,6 @@ fn validate_rule_ref() {
     rules.insert("seven".to_string(), LITERAL_7.clone());
     let ctx = BasicContext::new(rules);
     let node2 = &Node::Rule(Rule::new("seven"));
-    validate_cbor(&gen_value(7), node2, &ctx).unwrap();
-    validate_cbor(&gen_value(8), node2, &ctx).unwrap_err();
+    validate_cbor(node2, &gen_value(7), &ctx).unwrap();
+    validate_cbor(node2, &gen_value(8), &ctx).unwrap_err();
 }

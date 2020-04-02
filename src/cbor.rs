@@ -45,48 +45,30 @@ impl From<CBOR_Value> for Value {
     }
 }
 
-pub fn validate_cbor(value: &CBOR_Value, node: &Node, ctx: &dyn Context) -> ValidateResult {
+pub fn validate_cbor(node: &Node, value: &CBOR_Value, ctx: &dyn Context) -> ValidateResult {
     let value = Value::from(value);
     validate(&value, node, ctx)
 }
 
 /// Validate CBOR-encoded data against a specified rule in a text CDDL schema.
-pub fn validate_cbor_cddl_named(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResult {
+pub fn validate_cbor_bytes(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResult {
     // Parse the CDDL text and flatten it into IVT form.
     let flat_cddl = flatten_from_str(cddl)?;
     let ctx = BasicContext::new(flat_cddl);
 
+    // Find the rule name that was requested
     let rule_node: &Node = ctx.rules.get(name).ok_or_else(|| {
         let msg = format!("rule/group lookup failure: {}", name);
         ValidateError::Oops(msg)
     })?;
 
+    // Deserialize the CBOR bytes
     let cbor_value: CBOR_Value = serde_cbor::from_slice(cbor).map_err(|e| {
         let msg = format!("cbor parsing failed: {}", e);
         ValidateError::Oops(msg)
     })?;
+
+    // Convert the CBOR tree into a Value tree for validation
     let value = Value::from(cbor_value);
-
-    validate(&value, rule_node, &ctx)
-}
-
-// Validate CBOR against a CDDL description.
-pub fn validate_cbor_cddl(cddl: &str, cbor: &[u8]) -> ValidateResult {
-    // Parse the CDDL text and flatten it into IVT form.
-    let flat_cddl = flatten_from_str(cddl)?;
-    let ctx = BasicContext::new(flat_cddl);
-
-    let cbor_value: CBOR_Value = serde_cbor::from_slice(cbor).map_err(|e| {
-        let msg = format!("cbor parsing failed: {}", e);
-        ValidateError::Oops(msg)
-    })?;
-    let value = Value::from(cbor_value);
-
-    // FIXME: We stored rules in a BTreeMap, which caused us to lose access to their original
-    // ordering!
-    // For now, just grab the first rule we find.  We'll be wrong some of the time,
-    // but we'll fix that in a moment.
-    let rule_node: &Node = ctx.rules.values().next().unwrap();
-
     validate(&value, rule_node, &ctx)
 }

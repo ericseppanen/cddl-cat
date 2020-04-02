@@ -41,7 +41,7 @@ impl WorkingArray {
 
 // This is the main validation dispatch function.
 // It tries to match a Node and a Value, recursing as needed.
-pub fn validate(value: &Value, node: &Node, ctx: &dyn Context) -> ValidateResult {
+pub(crate) fn validate(value: &Value, node: &Node, ctx: &dyn Context) -> ValidateResult {
     match node {
         Node::Literal(l) => validate_literal(l, value),
         Node::PreludeType(p) => validate_prelude_type(p, value),
