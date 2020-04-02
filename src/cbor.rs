@@ -5,17 +5,22 @@
 use crate::context::{BasicContext, Context};
 use crate::flatten::flatten_from_str;
 use crate::ivt::Node;
-use crate::util::{ValidateError, ValidateResult};
+use crate::util::{make_oops, ValidateError, ValidateResult};
 use crate::validate::validate;
 use crate::value::Value;
 use serde_cbor::Value as CBOR_Value;
+use std::collections::BTreeMap;
+use std::convert::TryFrom;
 
 // These conversions seem obvious and pointless, but over time they may
 // diverge.  However, CDDL and CBOR were designed to work with one another, so
 // it's not surprising that they map almost perfectly.
-impl From<&CBOR_Value> for Value {
-    fn from(value: &CBOR_Value) -> Value {
-        match value {
+
+impl TryFrom<&CBOR_Value> for Value {
+    type Error = ValidateError;
+
+    fn try_from(value: &CBOR_Value) -> Result<Self, Self::Error> {
+        let result = match value {
             CBOR_Value::Null => Value::Null,
             CBOR_Value::Bool(b) => Value::Bool(*b),
             CBOR_Value::Integer(i) => Value::Integer(*i),
@@ -23,31 +28,43 @@ impl From<&CBOR_Value> for Value {
             CBOR_Value::Bytes(b) => Value::Bytes(b.clone()),
             CBOR_Value::Text(t) => Value::Text(t.clone()),
             CBOR_Value::Array(a) => {
-                let array = a.iter().map(|v| Value::from(v)).collect();
-                Value::Array(array)
+                let array: Result<_, _> = a.iter().map(|v| Value::try_from(v)).collect();
+                Value::Array(array?)
             }
             CBOR_Value::Map(m) => {
-                let map = m
+                type MapTree = BTreeMap<Value, Value>;
+                let map: Result<MapTree, _> = m
                     .iter()
-                    .map(|(k, v)| (Value::from(k), Value::from(v)))
+                    .map(|(k, v)| {
+                        // An iterator returning a 2-tuple can be used as (key, value)
+                        // when building a new map.
+                        Ok((Value::try_from(k)?, Value::try_from(v)?))
+                    })
                     .collect();
-                Value::Map(map)
+                Value::Map(map?)
             }
-            _ => panic!("can't handle hidden cbor Value"),
-        }
+            _ => {
+                // cbor::Value has a few hidden internal variants.  We should
+                // never see them, but return an error if we do.
+                return make_oops("can't handle hidden cbor Value");
+            }
+        };
+        Ok(result)
     }
 }
 
 // A variant that consumes the CBOR Value.
-impl From<CBOR_Value> for Value {
-    fn from(value: CBOR_Value) -> Value {
-        Value::from(&value)
+impl TryFrom<CBOR_Value> for Value {
+    type Error = ValidateError;
+
+    fn try_from(value: CBOR_Value) -> Result<Self, Self::Error> {
+        Value::try_from(&value)
     }
 }
 
 /// Validate already-parsed CBOR data against an already-parsed CDDL schema.
 pub fn validate_cbor(node: &Node, value: &CBOR_Value, ctx: &dyn Context) -> ValidateResult {
-    let value = Value::from(value);
+    let value = Value::try_from(value)?;
     validate(&value, node, ctx)
 }
 
@@ -70,6 +87,6 @@ pub fn validate_cbor_bytes(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResul
     })?;
 
     // Convert the CBOR tree into a Value tree for validation
-    let value = Value::from(cbor_value);
+    let value = Value::try_from(cbor_value)?;
     validate(&value, rule_node, &ctx)
 }
