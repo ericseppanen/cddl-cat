@@ -36,7 +36,7 @@ struct WorkingArray {
 
 impl WorkingArray {
     /// Makes a copy of an existing map's table.
-    fn new(array: &Vec<Value>) -> WorkingArray {
+    fn new(array: &[Value]) -> WorkingArray {
         let deque: VecDeque<Value> = array.iter().cloned().collect();
         WorkingArray { array: deque }
     }
@@ -47,7 +47,7 @@ impl WorkingArray {
 pub(crate) fn validate(value: &Value, node: &Node, ctx: &dyn Context) -> ValidateResult {
     match node {
         Node::Literal(l) => validate_literal(l, value),
-        Node::PreludeType(p) => validate_prelude_type(p, value),
+        Node::PreludeType(p) => validate_prelude_type(*p, value),
         Node::Choice(c) => validate_choice(c, value, ctx),
         Node::Map(m) => validate_map(m, value, ctx),
         Node::Array(a) => validate_array(a, value, ctx),
@@ -140,25 +140,20 @@ fn map_search(node: &Node, working_map: &mut WorkingMap, ctx: &dyn Context) -> T
 
     for key in working_map.map.keys() {
         let attempt = validate(key, node, ctx);
-        match attempt {
-            Ok(_) => {
-                // This key matches the node.  Remove the key and return success.
-                // Some juggling is required to satisfy the borrow checker.
-                let key2 = key.clone();
-                drop(key);
-                let val = working_map.map.remove(&key2).unwrap();
-                return Ok(val);
-            }
-            Err(_) => {
-                // This key didn't match, but maybe another one will
-            }
+        if attempt.is_ok() {
+            // This key matches the node.  Remove the key and return success.
+            // Some juggling is required to satisfy the borrow checker.
+            let key2: Value = key.clone();
+            let val = working_map.map.remove(&key2).unwrap();
+            return Ok(val);
         }
     }
     // We searched all the keys without finding a match.  Validation fails.
     make_oops("failed map_search")
 }
 
-fn validate_prelude_type(ty: &PreludeType, value: &Value) -> ValidateResult {
+// Note `ty` is passed by value because clippy says it's only 1 byte.
+fn validate_prelude_type(ty: PreludeType, value: &Value) -> ValidateResult {
     match (ty, value) {
         (PreludeType::Any, _) => Ok(()),
         (PreludeType::Bool, Value::Bool(_)) => Ok(()),
@@ -184,7 +179,7 @@ fn validate_array(ar: &Array, value: &Value, ctx: &dyn Context) -> ValidateResul
     }
 }
 
-fn validate_array_part2(ar: &Array, value_array: &Vec<Value>, ctx: &dyn Context) -> ValidateResult {
+fn validate_array_part2(ar: &Array, value_array: &[Value], ctx: &dyn Context) -> ValidateResult {
     // Strategy for validating an array:
     // 1. We assume that the code that constructed the IVT Array placed the
     //    members in matching order (literals first, more general types at the
@@ -276,7 +271,7 @@ fn validate_array_occur(
         }
     }
     if count < lower_limit {
-        return make_oops(&format!("failure to find array member"));
+        return make_oops("failure to find array member");
     }
     Ok(())
 }
@@ -401,7 +396,7 @@ fn validate_map_occur(
         }
     }
     if count < lower_limit {
-        return make_oops(&format!("failure to find key-value pair"));
+        return make_oops("failure to find key-value pair");
     }
     Ok(())
 }

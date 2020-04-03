@@ -9,7 +9,6 @@ use crate::ivt::*;
 use crate::util::{make_oops, ValidateError};
 use cddl::ast::{self, CDDL};
 use cddl::parser::cddl_from_str;
-use hex;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 

@@ -28,7 +28,7 @@ impl TryFrom<&CBOR_Value> for Value {
             CBOR_Value::Bytes(b) => Value::Bytes(b.clone()),
             CBOR_Value::Text(t) => Value::Text(t.clone()),
             CBOR_Value::Array(a) => {
-                let array: Result<_, _> = a.iter().map(|v| Value::try_from(v)).collect();
+                let array: Result<_, _> = a.iter().map(Value::try_from).collect();
                 Value::Array(array?)
             }
             CBOR_Value::Map(m) => {

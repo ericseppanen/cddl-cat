@@ -58,6 +58,7 @@ pub mod tests {
     pub struct DummyContext {}
 
     impl DummyContext {
+        #![allow(clippy::new_without_default)]
         pub fn new() -> DummyContext {
             DummyContext {}
         }
