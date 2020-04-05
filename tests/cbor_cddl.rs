@@ -1,4 +1,4 @@
-use cddl_validator::cbor::validate_cbor_bytes;
+use cddl_cat::cbor::validate_cbor_bytes;
 use serde::{Deserialize, Serialize};
 
 #[rustfmt::skip] // allow arbitrary indents for readability
@@ -125,7 +125,6 @@ fn validate_cbor_bytestring() {
 }
 
 #[test]
-#[ignore]
 fn validate_cbor_array() {
     let cddl_input = r#"thing = []"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap();

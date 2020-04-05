@@ -1,7 +1,7 @@
-use cddl_validator::cbor::validate_cbor;
-use cddl_validator::context::{tests::DummyContext, BasicContext, RulesByName};
-use cddl_validator::ivt::*;
-use cddl_validator::util::ValidateResult;
+use cddl_cat::cbor::validate_cbor;
+use cddl_cat::context::{tests::DummyContext, BasicContext, RulesByName};
+use cddl_cat::ivt::*;
+use cddl_cat::util::ValidateResult;
 use serde::ser::Serialize;
 use serde_cbor::Value;
 use std::collections::HashMap;

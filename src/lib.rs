@@ -1,35 +1,48 @@
-//! **This crate is experimental.**
-//!
 //! This is a library for validating data structures against a CDDL document.
 //!
-//! This crate is a playground for testing ways to improve the validation
-//! capabilities of the [`cddl`] crate.
+//! **Note:** This library is fairly new, and may still contain significant
+//! bugs, ommissions, or unstable interfaces.
 //!
 //! The goal of this library is to make individual encodings (like CBOR or
-//! JSON) easier to validate, using the following tools:
+//! JSON) easy to validate.
 //!
-//! 1. An "Intermediate Validation Tree" (IVT) is constructed from the CDDL
-//!    AST; this removes some of the CDDL syntax detail (groups, barewords,
-//!    sockets, generics), resulting in a simplified tree that can be more
-//!    easily validated.
+//! Some of the ways this library differs from other implementations:
 //!
-//! 2. The IVT is constructed almost entirely of [`Node`] elements, allowing
-//!    recursive validation.
+//! - An "Intermediate Validation Tree" ([`ivt`]) is constructed from the CDDL
+//!   AST; this removes some of the CDDL syntax detail resulting in a
+//!   simplified tree that can be more easily validated.
+//!   The IVT is constructed almost entirely of [`Node`] elements, allowing
+//!   recursive validation.
 //!
-//! 3. Validation helper functions that are fully generic (like recursive
-//!    validation of [`Choice`] types) can be written once and used by all
-//!    data formats.
+//! - Validation is performed by first translating the incoming data into
+//!   a generic tree form, so the bulk of the validation code is completely
+//!   agnostic to the serialization format.
 //!
-//! 4. Validation is context-free because the tree is built of [`Arc`]
-//!    shared references; global lookups into other rules is transparent.
+//! An example, validating CBOR-encoded data against a CDDL schema:
+//! ```
+//! use cddl_cat::validate_cbor_bytes;
+//! use serde::Serialize;
+//!
+//! #[derive(Serialize)]
+//! struct PersonStruct {
+//!     name: String,
+//!     age: u32,
+//! }
+//!
+//! let input = PersonStruct {
+//!     name: "Bob".to_string(),
+//!     age: 43,
+//! };
+//! let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+//! let cddl_input = "thing = {name: tstr, age: int}";
+//! validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
+//! ```
 //!
 //! [`Node`]: ivt::Node
-//! [`Validate`]: ivt::Validate
-//! [`Choice`]: ivt::Choice
-//! [`Arc`]: std::sync::Arc
 
 #![warn(missing_docs)]
 
+pub mod ast;
 pub mod cbor;
 pub(crate) mod validate;
 pub mod flatten;
@@ -37,3 +50,6 @@ pub mod ivt;
 pub mod util;
 pub mod context;
 pub mod value;
+
+pub use ast::parse_cddl;
+pub use cbor::{validate_cbor, validate_cbor_bytes};

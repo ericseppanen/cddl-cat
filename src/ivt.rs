@@ -6,6 +6,7 @@
 //! This module doesn't know anything about validating specific types (e.g.
 //! CBOR or JSON), but it helps make writing those validators easier.
 
+use crate::ast;
 use std::fmt;
 
 /// One of the types named in the CDDL prelude.
@@ -131,14 +132,8 @@ impl fmt::Debug for KeyValue {
 ///
 /// [RFC8610]: https://tools.ietf.org/html/rfc8610
 
-#[derive(Debug, Clone)]
-#[allow(missing_docs)]
-pub enum OccurLimit {
-    Optional,
-    ZeroOrMore,
-    OneOrMore,
-    Numbered(usize, usize),
-}
+// Re-use the Occur limit type that the parser uses
+pub type OccurLimit = ast::Occur;
 
 /// Occurences specify how many times a value can appear.
 ///

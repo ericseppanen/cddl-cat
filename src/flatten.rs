@@ -1,14 +1,15 @@
-//! Tools for converting a [`cddl::ast`] (syntax tree) into an [`ivt`].
+//! Tools for converting the [`ast`] (syntax tree) into an [`ivt`]
+//! (intermediate validation tree).
 //!
 //! This module is called "flatten" because its goal is to flatten syntax
 //! tree detail that's not useful for validation.
 //!
 //! [`ivt`]: crate::ivt
+//! [`ast`]: crate::ast
 
 use crate::ivt::*;
 use crate::util::{make_oops, ValidateError};
-use cddl::ast::{self, CDDL};
-use cddl::parser::cddl_from_str;
+use crate::ast::{self, parse_cddl};
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 
@@ -20,18 +21,17 @@ pub type FlattenResult<T> = std::result::Result<T, ValidateError>;
 
 /// Convert a CDDL schema in UTF-8 form into a (name, rules) map.
 pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
-    let cddl = cddl_from_str(cddl_input).map_err(|e| {
-        // FIXME: don't throw away the original error
-        let msg = format!("cddl parse error {}", e);
+    let cddl = parse_cddl(cddl_input).map_err(|e| {
+        let msg = format!("cddl parse error: {}", e);
         ValidateError::Oops(msg)
     })?;
     flatten(&cddl)
 }
 
 /// Convert an already-parsed cddl AST into a (name, rules) map.
-pub fn flatten(ast: &CDDL) -> FlattenResult<RulesByName> {
+pub fn flatten(cddl: &ast::Cddl) -> FlattenResult<RulesByName> {
     // This first pass generates a tree of Nodes from the AST.
-    ast.rules.iter().map(|rule| flatten_rule(rule)).collect()
+    cddl.rules.iter().map(|rule| flatten_rule(rule)).collect()
 }
 
 /// flatten an ast::Rule to an ivt::Node
@@ -39,33 +39,16 @@ pub fn flatten(ast: &CDDL) -> FlattenResult<RulesByName> {
 /// Returns (name, node) where the name is the name of the rule (which may
 /// be referenced in other places.
 fn flatten_rule(rule: &ast::Rule) -> FlattenResult<(String, Node)> {
-    let (name, node) = match rule {
-        ast::Rule::Type { rule, .. } => flatten_typerule(rule)?,
-        ast::Rule::Group { rule, .. } => flatten_grouprule(rule)?,
+    use ast::RuleVal;
+    let node = match &rule.val {
+        RuleVal::AssignType(t) => flatten_type(&t)?,
+        RuleVal::AssignGroup(g) => flatten_groupentry(&g)?,
     };
-    Ok((name, node))
-}
-
-// returns (name, node) just like flatten_rule()
-fn flatten_typerule(typerule: &ast::TypeRule) -> FlattenResult<(String, Node)> {
-    // FIXME: handle generic_param
-    // FIXME: handle is_type_choice_alternate
-    let node = flatten_type(&typerule.value)?;
-    Ok((typerule.name.ident.clone(), node))
-}
-
-// returns (name, node) just like flatten_rule()
-// FIXME: should groups and rules be kept separate?
-fn flatten_grouprule(grouprule: &ast::GroupRule) -> FlattenResult<(String, Node)> {
-    // FIXME: handle generic_param
-    // FIXME: handle is_type_choice_alternate
-    let node = flatten_groupentry(&grouprule.entry)?;
-    Ok((grouprule.name.ident.clone(), node))
+    Ok((rule.name.clone(), node))
 }
 
 fn flatten_type(ty: &ast::Type) -> FlattenResult<Node> {
-    let options: FlattenResult<Vec<Node>> = ty
-        .type_choices
+    let options: FlattenResult<Vec<Node>> = ty.0
         .iter()
         .map(|type1| flatten_type1(type1))
         .collect();
@@ -80,27 +63,35 @@ fn flatten_type(ty: &ast::Type) -> FlattenResult<Node> {
 
 fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
     // FIXME: handle range & control operators.
-    flatten_type2(&ty1.type2)
+    flatten_type2(ty1)
+}
+
+fn flatten_value(value: &ast::Value) -> FlattenResult<Node> {
+    use ast::Value;
+    match value {
+        Value::Text(s) => Ok(literal_text(s)),
+        Value::Uint(u) => {
+            let value = num_to_i128(*u)?;
+            Ok(literal_int(value))
+        }
+        Value::Nint(n) => {
+            let value = num_to_i128(*n)?;
+            Ok(literal_int(value))
+        }
+        Value::Float(f) => Ok(literal_float(*f)),
+        Value::Bytes(b) => Ok(literal_bytes(b.clone())),
+    }
 }
 
 fn flatten_type2(ty2: &ast::Type2) -> FlattenResult<Node> {
     use ast::Type2;
     match ty2 {
-        Type2::UintValue { value, .. } => {
-            let value = num_to_i128(*value)?;
-            Ok(literal_int(value))
-        }
-        Type2::TextValue { value, .. } => Ok(literal_text(value)),
-        Type2::FloatValue { value, .. } => Ok(literal_float(*value)),
-        Type2::Typename { ident, .. } => flatten_typename(&ident.ident),
-        Type2::Map { group, .. } => flatten_map(&group),
-        Type2::Array { group, .. } => flatten_array(&group),
-        Type2::B16ByteString { value, .. } => {
-            // Maybe hex decode belongs in the CDDL parser instead?
-            Ok(literal_bytes(bytes_from_hex(value)?))
-        }
-        Type2::ParenthesizedType { pt, .. } => flatten_type(pt),
-        _ => make_oops("unimplemented Type2 variant"),
+        Type2::Value(v) => flatten_value(v),
+        Type2::Typename(s) => flatten_typename(&s),
+        Type2::Parethesized(t) => flatten_type(t),
+        Type2::Map(g) => flatten_map(&g),
+        Type2::Array(g) => flatten_array(&g),
+        //_ => make_oops("unimplemented Type2 variant"),
     }
 }
 
@@ -130,19 +121,20 @@ fn flatten_map(group: &ast::Group) -> FlattenResult<Node> {
 
 /// Flatten a group into a Map.
 fn flatten_array(group: &ast::Group) -> FlattenResult<Node> {
+    println!("XXX flatten_array {:#?}", group);
     let kvs = flatten_group(group)?;
     Ok(Node::Array(Array { members: kvs }))
 }
 
 // Returns an ivt::Group node, or a vector of other nodes.
 fn flatten_group(group: &ast::Group) -> FlattenResult<Vec<Node>> {
-    if group.group_choices.len() == 1 {
-        let groupchoice = &group.group_choices[0];
+    let group_choices = &group.0;
+    if group_choices.len() == 1 {
+        let groupchoice = &group_choices[0];
         flatten_groupchoice(groupchoice)
     } else {
         // Emit a Choice node, containing a vector of Group nodes.
-        let options: FlattenResult<Vec<Node>> = group
-            .group_choices
+        let options: FlattenResult<Vec<Node>> = group_choices
             .iter()
             .map(|gc| {
                 let inner_members = flatten_groupchoice(gc)?;
@@ -156,33 +148,36 @@ fn flatten_group(group: &ast::Group) -> FlattenResult<Vec<Node>> {
     }
 }
 
-fn flatten_groupchoice(groupchoice: &ast::GroupChoice) -> FlattenResult<Vec<Node>> {
-    let kvs: FlattenResult<Vec<Node>> = groupchoice
-        .group_entries
+fn flatten_groupchoice(groupchoice: &ast::GrpChoice) -> FlattenResult<Vec<Node>> {
+    let group_entries = &groupchoice.0;
+    let kvs: FlattenResult<Vec<Node>> = group_entries
         .iter()
-        .map(|ge_tuple| {
-            let group_entry = &ge_tuple.0;
+        .map(|group_entry| {
             flatten_groupentry(group_entry)
         })
         .collect();
     kvs
 }
 
-fn flatten_groupentry(group_entry: &ast::GroupEntry) -> FlattenResult<Node> {
-    use ast::GroupEntry;
+fn flatten_groupentry(group_entry: &ast::GrpEnt) -> FlattenResult<Node> {
+    let node = flatten_groupentry_val(&group_entry.val)?;
+    Ok(occur_wrap(&group_entry.occur, node))
+}
 
-    match group_entry {
-        GroupEntry::ValueMemberKey { ge, .. } => flatten_vmke(ge),
-        GroupEntry::TypeGroupname { ge, .. } => flatten_tge(ge),
-        GroupEntry::InlineGroup { group, occur, .. } => {
-            // FIXME: if nodes has len(1), just return a single node.
-            let nodes = flatten_group(group)?;
-            let node = Node::Group(Group { members: nodes });
-            Ok(occur_wrap(&occur, node))
+fn flatten_groupentry_val(gev: &ast::GrpEntVal) -> FlattenResult<Node> {
+    use ast::GrpEntVal;
+
+    match gev {
+        GrpEntVal::Member(m) => flatten_member(m),
+        GrpEntVal::Groupname(s) => flatten_typename(s),
+        GrpEntVal::Parenthesized(g) => {
+            let nodes = flatten_group(g)?;
+            Ok(Node::Group(Group { members: nodes }))
         }
     }
 }
 
+/* Don't delete this yet; I would like to remove usize::MAX from the parser.
 /// Convert ast::Occur to ivt::OccurLimit
 impl From<&ast::Occur> for OccurLimit {
     fn from(occur: &ast::Occur) -> OccurLimit {
@@ -204,6 +199,7 @@ impl From<&ast::Occur> for OccurLimit {
         }
     }
 }
+*/
 
 /// If the ast::Occur is Some, wrap the given Node in an ivt::Occur.
 ///
@@ -215,36 +211,20 @@ impl From<&ast::Occur> for OccurLimit {
 ///
 fn occur_wrap(occur: &Option<ast::Occur>, node: Node) -> Node {
     match &occur {
-        Some(o) => Node::Occur(Occur::new(o.into(), node)),
+        Some(o) => Node::Occur(Occur::new(o.clone(), node)),
         None => node,
     }
 }
 
-fn flatten_tge(tge: &ast::TypeGroupnameEntry) -> FlattenResult<Node> {
-    // The incoming TypeGroupnameEntry can mean multiple things.  It carries
-    // an Identifier, which could refer to:
-    // - a prelude type
-    // - a user-defined type rule
-    // - a user-defined group
-
-    // FIXME: handle generic_arg
-
-    let node = flatten_typename(&tge.name.ident)?;
-    Ok(occur_wrap(&tge.occur, node))
-}
-
-fn flatten_vmke(vmke: &ast::ValueMemberKeyEntry) -> FlattenResult<Node> {
-    let member_key = vmke.member_key.as_ref().unwrap(); // FIXME: may be None for arrays
-    let key = flatten_memberkey(&member_key)?;
-    let value = flatten_type(&vmke.entry_type)?;
-    let node = Node::KeyValue(KeyValue::new(key, value));
-    Ok(occur_wrap(&vmke.occur, node))
-}
-
-// hex::decode, remapping the error.
-// FIXME: maybe implementing From<FromHexError> for ValidateError would be better.
-fn bytes_from_hex<T: AsRef<[u8]>>(data: T) -> FlattenResult<Vec<u8>> {
-    hex::decode(data).map_err(|_| ValidateError::Oops("bad hex literal".to_string()))
+fn flatten_member(member: &ast::Member) -> FlattenResult<Node> {
+    match &member.key {
+        Some(key) => {
+            let key = flatten_memberkey(&key)?;
+            let value = flatten_type(&member.value)?;
+            Ok(Node::KeyValue(KeyValue::new(key, value)))
+        }
+        None => flatten_type(&member.value)
+    }
 }
 
 // try_into(), remapping the error.
@@ -255,46 +235,20 @@ fn num_to_i128<T: TryInto<i128>>(n: T) -> FlattenResult<i128> {
         .map_err(|_| ValidateError::Oops("try_into<i128> failed".to_string()))
 }
 
-// FIXME: it seems weird to me that cddl::ast::MemberKey::Value includes a
-// cddl::token::Value, when literals in other places are presented using
-// cddl::ast::Type2 .  Is that a deliberate choice, or a parser bug?
-fn translate_token_value(v: &cddl::token::Value) -> FlattenResult<Node> {
-    use cddl::token::Value;
-    let result = match v {
-        Value::INT(i) => {
-            let i = num_to_i128(*i)?;
-            literal_int(i)
-        }
-        Value::UINT(u) => {
-            let u = num_to_i128(*u)?;
-            literal_int(u)
-        }
-        Value::FLOAT(f) => literal_float(*f),
-        Value::TEXT(s) => literal_text(s),
-        Value::BYTE(b) => {
-            use cddl::token::ByteValue;
-            match b {
-                ByteValue::B16(encoded) => literal_bytes(bytes_from_hex(encoded)?),
-                // FIXME: UTF8 and Base64 variants
-                _ => return make_oops("unhandled token::ByteValue"),
-            }
-        }
-    };
-    Ok(result)
-}
-
 fn flatten_memberkey(memberkey: &ast::MemberKey) -> FlattenResult<Node> {
-    use ast::MemberKey;
-    match memberkey {
-        MemberKey::Bareword { ident, .. } => {
-            // A "bareword" is just a literal string used in the context
-            // of a map key.
-            let name = ident.ident.clone();
-            Ok(literal_text(name))
+    use ast::MemberKeyVal;
+
+    // FIXME: handle cut
+
+    let memberkey_val = &memberkey.val;
+    match memberkey_val {
+        MemberKeyVal::Bareword(s) => {
+            // A "bareword" is a literal string that appears without quote
+            // marks.  Treat it just like we would a literal with quotes.
+            Ok(literal_text(s.clone()))
         }
-        // FIXME: handle cut
-        MemberKey::Type1 { t1, .. } => flatten_type1(t1.as_ref()),
-        MemberKey::Value { value, .. } => translate_token_value(value),
+        MemberKeyVal::Type1(t1) => flatten_type1(&t1),
+        MemberKeyVal::Value(v) => flatten_value(&v),
     }
 }
 
