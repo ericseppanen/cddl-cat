@@ -708,7 +708,7 @@ fn value(input: &str) -> JResult<&str, Value> {
     alt((
         float_or_int,
         map(text_literal, |s| Value::Text(s.into())),
-        map(bytestring, |b| Value::Bytes(b)),
+        map(bytestring, Value::Bytes),
     ))(input)
 }
 
@@ -864,9 +864,9 @@ fn test_grpent_parens() {
 
 fn grpent_val(input: &str) -> JResult<&str, GrpEntVal> {
     alt((
-        map(grpent_member, |m| GrpEntVal::Member(m)),
+        map(grpent_member, GrpEntVal::Member),
         map(ident, |s| GrpEntVal::Groupname(s.into())),
-        map(grpent_parens, |g| GrpEntVal::Parenthesized(g)),
+        map(grpent_parens, GrpEntVal::Parenthesized),
     ))
     (input)
 }
@@ -975,7 +975,8 @@ fn grpchoice(input: &str) -> JResult<&str, GrpChoice> {
     let f = many0(
         terminated(grpent, optcom)
     );
-    map(f, |ents| GrpChoice(ents))(input)
+    map(f, GrpChoice)
+    (input)
 }
 
 #[test]
@@ -1070,11 +1071,11 @@ fn type2_array(input: &str) -> JResult<&str, Group> {
 //         { group }
 fn type2(input: &str) -> JResult<&str, Type2> {
     alt((
-        map(value, |v| Type2::Value(v)),
+        map(value, Type2::Value),
         map(ident, |i| Type2::Typename(i.into())),
-        map(type2_parens, |t| Type2::Parethesized(t)),
-        map(type2_map, |m| Type2::Map(m)),
-        map(type2_array, |m| Type2::Array(m)),
+        map(type2_parens, Type2::Parethesized),
+        map(type2_map, Type2::Map),
+        map(type2_array, Type2::Array),
     ))
     (input)
 }
@@ -1090,7 +1091,8 @@ fn ty(input: &str) -> JResult<&str, Type> {
         delimited(ws, tag("/"), ws),
         type1
     );
-    map(f, |ty2| Type(ty2))(input)
+    map(f, Type)
+    (input)
 }
 
 // rule = typename [genericparm] S assignt S type
@@ -1128,8 +1130,8 @@ fn rule_val(input: &str) -> JResult<&str, RuleVal> {
         tag("="),
         ws,
         alt((
-            map(ty, |t| RuleVal::AssignType(t)),
-            map(grpent, |g| RuleVal::AssignGroup(g))
+            map(ty, RuleVal::AssignType),
+            map(grpent, RuleVal::AssignGroup)
         ))
     );
     // We're just throwing away the operator for now, but we'll need it
