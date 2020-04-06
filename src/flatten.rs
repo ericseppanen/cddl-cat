@@ -89,6 +89,7 @@ fn flatten_type2(ty2: &ast::Type2) -> FlattenResult<Node> {
         Type2::Parethesized(t) => flatten_type(t),
         Type2::Map(g) => flatten_map(&g),
         Type2::Array(g) => flatten_array(&g),
+        Type2::Unwrap(r) => Ok(Node::Unwrap(Rule::new(r))),
         //_ => make_oops("unimplemented Type2 variant"),
     }
 }

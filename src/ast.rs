@@ -147,6 +147,7 @@ pub enum Type2 {
     Parethesized(Type),
     Map(Group),
     Array(Group),
+    Unwrap(String),
 }
 
 /// A CDDL type, with additional range/control operators.

@@ -234,6 +234,43 @@ fn validate_cbor_array_groups() {
 }
 
 #[test]
+fn validate_cbor_array_unwrap() {
+    // unwrap something into the head of an array
+    let cddl_input = r#"header = [a: int, b: int] thing = [~header c: int]"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap_err();
+    // unwrap something into the tail of an array
+    let cddl_input = r#"footer = [a: int, b: int] thing = [c: int ~footer]"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
+
+    // unwrap something into the middle of an array
+    let cddl_input = r#"middle = [int] thing = [a: int, ~middle, c: int]"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
+
+    // add an extra rule redirection while unwrapping
+    let cddl_input = r#"foo = int middle = [foo] thing = [a: int, ~middle, c: int]"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
+
+    // Fail if we find too few items.
+    let cddl_input = r#"header = [a: int] thing = [~header, c: int]"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    let cddl_input = r#"footer = [a: int] thing = [c: int, ~footer]"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+
+    // Fail if we don't find enough matching items while unwrapping.
+    let cddl_input = r#"footer = [a: int, b: int] thing = [c: int, d: int, ~footer]"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+
+    // Fail if the unwrapped name doesn't resolve.
+    let cddl_input = r#"thing = [c: int ~footer]"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+
+    // Unwrapping a map into an array isn't allowed.
+    let cddl_input = r#"header = {a: int, b: int} thing = [~header c: int]"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+}
+
+#[test]
 fn validate_cbor_array_record() {
     let cddl_input = r#"thing = [a: int, b: int, c: int]"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
@@ -277,6 +314,21 @@ fn validate_cbor_array_record() {
     //validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
 
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+}
+
+#[test]
+fn validate_cbor_map_unwrap() {
+    let input = PersonStruct {
+        name: "Bob".to_string(),
+        age: 43,
+    };
+    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cddl_input = r#"thing = {name: tstr, ~agroup} agroup = {age: int}"#;
+    validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
+
+    // Unwrapping an array into a map isn't allowed.
+    let cddl_input = r#"thing = {name: tstr, ~agroup} agroup = [age: int]"#;
+    validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
 }
 
 #[test]

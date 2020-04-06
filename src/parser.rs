@@ -847,6 +847,19 @@ fn type2_array(input: &str) -> JResult<&str, Group> {
     )(input)
 }
 
+// "~" S typename [genericarg]
+#[rustfmt::skip]
+fn type2_unwrap(input: &str) -> JResult<&str, &str> {
+    preceded(
+        tag("~"),
+        preceded(
+            ws,
+            ident
+        )
+    )
+    (input)
+}
+
 // type2 = value
 //       / typename [genericarg]
 //       / "(" S type S ")"
@@ -866,6 +879,7 @@ fn type2(input: &str) -> JResult<&str, Type2> {
         map(type2_parens, Type2::Parethesized),
         map(type2_map, Type2::Map),
         map(type2_array, Type2::Array),
+        map(type2_unwrap, |s| Type2::Unwrap(s.into())),
     ))
     (input)
 }

@@ -55,6 +55,7 @@ pub(crate) fn validate(value: &Value, node: &Node, ctx: &dyn Context) -> Validat
         Node::Group(g) => validate_standalone_group(g, value, ctx),
         Node::KeyValue(_) => make_oops("unexpected KeyValue"),
         Node::Occur(_) => make_oops("unexpected Occur"),
+        Node::Unwrap(_) => make_oops("unexpected Unwrap"),
     }
 }
 
@@ -236,6 +237,13 @@ fn validate_array_member(
             let next_node = ctx.lookup_rule(&r.name)?;
             validate_array_member(next_node, working_array, ctx)
         }
+        Node::Unwrap(r) => {
+            // Like Rule, we are dereferencing the Rule by hand here so that
+            // we can "see through" to the underlying data without forgetting
+            // we were in an array context.
+            let node = ctx.lookup_rule(&r.name)?;
+            validate_array_unwrap(node, working_array, ctx)
+        }
         Node::Group(g) => {
             // Recurse into each member of the group.
             for group_member in &g.members {
@@ -246,6 +254,28 @@ fn validate_array_member(
             Ok(())
         }
         m => validate_array_value(m, working_array, ctx),
+    }
+}
+
+fn validate_array_unwrap(
+    node: &Node,
+    working_array: &mut WorkingArray,
+    ctx: &dyn Context,
+) -> ValidateResult {
+    // After traversing an unwrap from inside an array, the next node must be an
+    // Array node too.
+    match node {
+        Node::Array(a) => {
+            // Recurse into each member of the unwrapped array.
+            for member in &a.members {
+                validate_array_member(member, working_array, ctx)?;
+            }
+            // All array members validated Ok.
+            Ok(())
+        }
+        _ => {
+            make_oops("unwrap found non-array type")
+        }
     }
 }
 
@@ -341,12 +371,18 @@ fn validate_map_member(
         Node::Occur(o) => validate_map_occur(o, working_map, ctx),
         Node::KeyValue(kv) => validate_map_keyvalue(kv, working_map, ctx),
         Node::Rule(r) => {
-            // NOTE!  validate() on a WorkingMap returns a Value (the result of a key-value lookup)
-            //
-            // So we can't use generic::validate() here.  We need to punch down
-            // a level into the rule and match again.
+            // We can't use the generic validate() here; we would forget that
+            // we were in a map context.  We need to punch down a level into
+            // the rule and match again.
             let next_node = ctx.lookup_rule(&r.name)?;
             validate_map_member(next_node, working_map, ctx)
+        }
+        Node::Unwrap(r) => {
+            // Like Rule, we are dereferencing the Rule by hand here so that
+            // we can "see through" to the underlying data without forgetting
+            // we were in a map context.
+            let node = ctx.lookup_rule(&r.name)?;
+            validate_map_unwrap(node, working_map, ctx)
         }
         Node::Group(g) => {
             // Recurse into each member of the group.
@@ -372,6 +408,28 @@ fn validate_map_member(
             make_oops("map choice failure")
         }
         _ => make_oops("unhandled map member"),
+    }
+}
+
+fn validate_map_unwrap(
+    node: &Node,
+    working_map: &mut WorkingMap,
+    ctx: &dyn Context,
+) -> ValidateResult {
+    // After traversing an unwrap from inside a map, the next node must be a
+    // Map node too.
+    match node {
+        Node::Map(m) => {
+            // Recurse into each member of the unwrapped array.
+            for member in &m.members {
+                validate_map_member(member, working_map, ctx)?;
+            }
+            // All array members validated Ok.
+            Ok(())
+        }
+        _ => {
+            make_oops("unwrap found non-map type")
+        }
     }
 }
 
