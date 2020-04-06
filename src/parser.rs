@@ -42,6 +42,7 @@ type JResult<I, O> = nom::IResult<I, O, ParseError>;
 
 /// The "kind" of error generated during CDDL parsing.
 #[derive(Debug, PartialEq)]
+#[non_exhaustive]
 pub enum ErrorKind {
     /// An integer didn't parse correctly.
     MalformedInteger,
