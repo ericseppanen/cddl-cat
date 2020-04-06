@@ -253,14 +253,14 @@ fn validate_array_member(
 // FIXME: this is pretty similar to validate_map_occur; maybe they can be combined?
 fn validate_array_occur(
     occur: &Occur,
-    working_map: &mut WorkingArray,
+    working_array: &mut WorkingArray,
     ctx: &dyn Context,
 ) -> ValidateResult {
     let (lower_limit, upper_limit) = occur.limits();
     let mut count: usize = 0;
 
     loop {
-        match validate_array_value(&occur.node, working_map, ctx) {
+        match validate_array_value(&occur.node, working_array, ctx) {
             Ok(_) => (),
             Err(_) => break,
         }
