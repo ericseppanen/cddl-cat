@@ -38,6 +38,22 @@
 //! validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
 //! ```
 //!
+//! Unimplemented features:
+//! - Generics
+//! - Non-cut map keys
+//! - Extend type with `/=`
+//! - Extend group with `//=`
+//! - Type sockets with `$`
+//! - Group sockets with `$$`
+//! - Range operators `..`, `...`
+//! - Control operators, e.g. `.size`, `.bits`, ...
+//! - Group unwrapping with `~`
+//! - Group enumeration with `&`
+//! - Tagged data with `#`
+//! - Literal integers with `0x` or `0b`
+//! - Hexfloat
+//! - Base64 bytestring literals (`b64'...'`)
+//!
 //! [`Node`]: ivt::Node
 
 #![warn(missing_docs)]

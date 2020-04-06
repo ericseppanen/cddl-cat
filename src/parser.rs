@@ -3,16 +3,6 @@
 //! The only public items here are the function [`parse_cddl`] and the error
 //! [`ParseError`] and its child enum [`ErrorKind`].
 //!
-//! Unimplemented features:
-//! - rule with `genericparm`
-//! - extend-type `/=`
-//! - extend-group `//=`
-//! - type1 rangeop and ctlop
-//! - type2 starting with `~`, `&`, `#`
-//! - grpent groupname with `genericarg`
-//! - integers with `0x` and `0b`
-//! - hexfloat
-//! - base64 bytestring literals (`b64'...'`)
 
 use crate::ast::*;
 use nom::{
