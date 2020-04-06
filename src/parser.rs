@@ -805,6 +805,7 @@ fn test_group_empty() {
     assert_eq!(result, r#"Ok(("", Group([GrpChoice([])])))"#);
 }
 
+// "(" S type S ")"
 #[rustfmt::skip]
 fn type2_parens(input: &str) -> JResult<&str, Type> {
     delimited(
@@ -818,6 +819,7 @@ fn type2_parens(input: &str) -> JResult<&str, Type> {
     )(input)
 }
 
+// "{" S group S "}"
 #[rustfmt::skip]
 fn type2_map(input: &str) -> JResult<&str, Group> {
     delimited(
@@ -831,6 +833,7 @@ fn type2_map(input: &str) -> JResult<&str, Group> {
     )(input)
 }
 
+// "[" S group S "]"
 #[rustfmt::skip]
 fn type2_array(input: &str) -> JResult<&str, Group> {
     delimited(
@@ -845,8 +848,16 @@ fn type2_array(input: &str) -> JResult<&str, Group> {
 }
 
 // type2 = value
-//         typename
-//         { group }
+//       / typename [genericarg]
+//       / "(" S type S ")"
+//       / "{" S group S "}"
+//       / "[" S group S "]"
+//       / "~" S typename [genericarg]
+//       / "&" S "(" S group S ")"
+//       / "&" S groupname [genericarg]
+//       / "#" "6" ["." uint] "(" S type S ")"
+//       / "#" DIGIT ["." uint]
+//       / "#"
 #[rustfmt::skip]
 fn type2(input: &str) -> JResult<&str, Type2> {
     alt((
