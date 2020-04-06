@@ -119,7 +119,6 @@ fn flatten_map(group: &ast::Group) -> FlattenResult<Node> {
 
 /// Flatten a group into a Map.
 fn flatten_array(group: &ast::Group) -> FlattenResult<Node> {
-    println!("XXX flatten_array {:#?}", group);
     let kvs = flatten_group(group)?;
     Ok(Node::Array(Array { members: kvs }))
 }
