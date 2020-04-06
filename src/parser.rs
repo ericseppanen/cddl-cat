@@ -49,13 +49,13 @@ use ErrorKind::*;
 #[derive(Debug, PartialEq)]
 pub struct ParseError {
     /// The "kind" of error generated during CDDL parsing.
-    kind: ErrorKind,
+    pub kind: ErrorKind,
     // FIXME: using String here is probably bad for performance because
     // lots of ephemeral errors will be created as each subparser is
     // attempted and then fails.  It would probably be smarter to allow
     // for &str contexts along the way.
     /// A snippet of text from the CDDL input that may be the cause of the error.
-    ctx: String,
+    pub ctx: String,
 }
 
 fn parse_error<S: Into<String>>(kind: ErrorKind, ctx: S) -> ParseError {
