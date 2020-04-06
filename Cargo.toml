@@ -24,4 +24,4 @@ serde = { version = "1.0", features = ["derive"] }
 
 [package.metadata.release]
 no-dev-version = true
-pre-release-commit-message = "Release {{version}}"
+pre-release-commit-message = "release {{version}}"
