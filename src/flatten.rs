@@ -7,10 +7,10 @@
 //! [`ivt`]: crate::ivt
 //! [`ast`]: crate::ast
 
-use crate::ivt::*;
-use crate::util::{make_oops, ValidateError};
 use crate::ast;
+use crate::ivt::*;
 use crate::parser::parse_cddl;
+use crate::util::{make_oops, ValidateError};
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 
@@ -49,10 +49,7 @@ fn flatten_rule(rule: &ast::Rule) -> FlattenResult<(String, Node)> {
 }
 
 fn flatten_type(ty: &ast::Type) -> FlattenResult<Node> {
-    let options: FlattenResult<Vec<Node>> = ty.0
-        .iter()
-        .map(|type1| flatten_type1(type1))
-        .collect();
+    let options: FlattenResult<Vec<Node>> = ty.0.iter().map(|type1| flatten_type1(type1)).collect();
     let options = options?;
 
     match options.len() {
@@ -153,9 +150,7 @@ fn flatten_groupchoice(groupchoice: &ast::GrpChoice) -> FlattenResult<Vec<Node>>
     let group_entries = &groupchoice.0;
     let kvs: FlattenResult<Vec<Node>> = group_entries
         .iter()
-        .map(|group_entry| {
-            flatten_groupentry(group_entry)
-        })
+        .map(|group_entry| flatten_groupentry(group_entry))
         .collect();
     kvs
 }
@@ -224,7 +219,7 @@ fn flatten_member(member: &ast::Member) -> FlattenResult<Node> {
             let value = flatten_type(&member.value)?;
             Ok(Node::KeyValue(KeyValue::new(key, value)))
         }
-        None => flatten_type(&member.value)
+        None => flatten_type(&member.value),
     }
 }
 

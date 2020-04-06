@@ -15,16 +15,18 @@
 //! - base64 bytestring literals (`b64'...'`)
 
 use crate::ast::*;
-use std::error;
-use std::fmt;
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while, take_while1},
-    character::complete::{multispace1, alpha0, anychar, char as charx, digit1, hex_digit1, one_of, not_line_ending},
-    combinator::{map, map_res, opt, recognize, all_consuming, value as valuex},
+    character::complete::{
+        alpha0, anychar, char as charx, digit1, hex_digit1, multispace1, not_line_ending, one_of,
+    },
+    combinator::{all_consuming, map, map_res, opt, recognize, value as valuex},
     multi::{fold_many0, many0, many1, separated_nonempty_list},
-    sequence::{pair, tuple, delimited, preceded, separated_pair, terminated},
+    sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
 };
+use std::error;
+use std::fmt;
 
 //
 // A note on the design of the parser:
@@ -32,7 +34,6 @@ use nom::{
 // Parsers built from the "nom" crate look a bit different from most other
 // Rust code; for extra readability there is a lot of extra indents that
 // rustfmt wouldn't like (and rustfmt::skip is applied extensively.)
-
 
 // This error type is used everywhere in this parser.  It allows
 // me to mix locally-generated custom errors with the errors that
@@ -99,7 +100,6 @@ impl From<nom::Err<ParseError>> for ParseError {
 
 // FIXME: the name collision here makes the code hard to read
 impl<I: Into<String>> nom::error::ParseError<I> for ParseError {
-
     fn from_error_kind(input: I, _kind: nom::error::ErrorKind) -> Self {
         parse_error(Unparseable, input)
     }
@@ -339,7 +339,6 @@ fn test_float_or_int() {
     assert!(float_or_int("abc").is_err());
 }
 
-
 // bytes = [bsqual] %x27 *BCHAR %x27
 // BCHAR = %x20-26 / %x28-5B / %x5D-10FFFD / SESC / CRLF
 // bsqual = "h" / "b64"
@@ -374,6 +373,7 @@ fn bytestring_hex(input: &str) -> JResult<&str, &str> {
     )(input)
 }
 
+#[rustfmt::skip]
 fn is_base64_char(c: char) -> bool {
     let ranges = [
         (0x30 ..= 0x39), // 0-9
@@ -409,9 +409,7 @@ fn parse_hex(s: &str) -> Result<Vec<u8>, ParseError> {
     // FIXME: this consumes more chars than the RFC says we should.
     let s: String = s.chars().filter(|c| !c.is_ascii_whitespace()).collect();
 
-    hex::decode(&s).map_err(|_| {
-        parse_error(MalformedHex, s)
-    })
+    hex::decode(&s).map_err(|_| parse_error(MalformedHex, s))
 }
 
 #[rustfmt::skip]
@@ -437,16 +435,13 @@ fn test_bytestring() {
     //assert_eq!(result1, bytestring("b64'YWJj'"));
 
     // FIXME: test invalid strings
-
 }
-
-
-
 
 // text = %x22 *SCHAR %x22
 // SCHAR = %x20-21 / %x23-5B / %x5D-7E / %x80-10FFFD / SESC
 // SESC = "\" (%x20-7E / %x80-10FFFD)
 
+#[rustfmt::skip]
 fn is_unescaped_schar(c: char) -> bool {
     let ranges = [
         (0x20 ..= 0x21),
@@ -503,7 +498,7 @@ fn test_text() {
     assert!(is_unescaped_schar('A'));
     assert!(is_unescaped_schar('の'));
     assert!(is_unescaped_schar(std::char::from_u32(0x10FF0).unwrap()));
-    assert!( ! is_unescaped_schar(0x7F as char));
+    assert!(!is_unescaped_schar(0x7F as char));
 
     assert_eq!(unescaped_schar("Aの"), Ok(("", "Aの")));
 
@@ -651,10 +646,7 @@ fn grpent_parens(input: &str) -> JResult<&str, Group> {
 fn test_grpent_parens() {
     let result = grpent_parens("()");
     let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", Group([GrpChoice([])])))"#
-    );
+    assert_eq!(result, r#"Ok(("", Group([GrpChoice([])])))"#);
 }
 
 #[rustfmt::skip]
@@ -683,7 +675,6 @@ fn test_grpent_val() {
         r#"Ok(("", Member(Member { key: None, value: Type([Value(Uint(17))]) })))"#
     );
 }
-
 
 // occur = [uint] "*" [uint]
 //       / "+"
@@ -766,7 +757,6 @@ fn test_grpent() {
         result,
         r#"Ok(("", GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Bareword("foo"), cut: true }), value: Type([Typename("bar")]) }) }))"#
     );
-
 }
 
 // grpchoice = zero-or-more "grpent optional-comma"
@@ -783,10 +773,7 @@ fn grpchoice(input: &str) -> JResult<&str, GrpChoice> {
 fn test_grpchoice_empty() {
     let result = grpchoice("");
     let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", GrpChoice([])))"#
-    );
+    assert_eq!(result, r#"Ok(("", GrpChoice([])))"#);
 }
 
 // group = grpchoice *(S "//" S grpchoice)
@@ -824,10 +811,7 @@ fn group(input: &str) -> JResult<&str, Group> {
 fn test_group_empty() {
     let result = group("");
     let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", Group([GrpChoice([])])))"#
-    );
+    assert_eq!(result, r#"Ok(("", Group([GrpChoice([])])))"#);
 }
 
 #[rustfmt::skip]
@@ -996,8 +980,8 @@ fn test_rule() {
     let result = rule("foo=bar").unwrap().1;
     let result = format!("{:?}", result);
     assert_eq!(
-            result,
-            r#"Rule { name: "foo", val: AssignType(Type([Typename("bar")])) }"#
+        result,
+        r#"Rule { name: "foo", val: AssignType(Type([Typename("bar")])) }"#
     );
 }
 
@@ -1006,8 +990,8 @@ fn test_cddl() {
     let result = parse_cddl("foo = {\"a\": bar,\n b => baz}");
     let result = format!("{:?}", result);
     assert_eq!(
-            result,
-            r#"Ok(Cddl { rules: [Rule { name: "foo", val: AssignType(Type([Map(Group([GrpChoice([GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Value(Text("a")), cut: true }), value: Type([Typename("bar")]) }) }, GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Type1(Typename("b")), cut: false }), value: Type([Typename("baz")]) }) }])]))])) }] })"#
+        result,
+        r#"Ok(Cddl { rules: [Rule { name: "foo", val: AssignType(Type([Map(Group([GrpChoice([GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Value(Text("a")), cut: true }), value: Type([Typename("bar")]) }) }, GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Type1(Typename("b")), cut: false }), value: Type([Typename("baz")]) }) }])]))])) }] })"#
     );
 }
 
@@ -1017,7 +1001,8 @@ fn test_stuff() {
     parse_cddl("thing = { foo : tstr }").unwrap();
     parse_cddl("bar = (c: int)").unwrap(); // This is a rule containing a group assignment.
     parse_cddl("thing = {agroup empty} agroup = (age: int, name: tstr) empty = ()").unwrap();
-    parse_cddl(r#"
+    parse_cddl(
+        r#"
         address = { delivery }
 
         delivery = (
@@ -1027,7 +1012,7 @@ fn test_stuff() {
 
         city = (
         name: tstr, zip_code: uint
-        )
-    "#).unwrap();
-
+        )"#,
+    )
+    .unwrap();
 }
