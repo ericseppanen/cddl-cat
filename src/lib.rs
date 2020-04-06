@@ -43,6 +43,7 @@
 #![warn(missing_docs)]
 
 pub mod ast;
+pub mod parser;
 pub mod cbor;
 pub(crate) mod validate;
 pub mod flatten;
@@ -51,5 +52,5 @@ pub mod util;
 pub mod context;
 pub mod value;
 
-pub use ast::parse_cddl;
+pub use parser::parse_cddl;
 pub use cbor::{validate_cbor, validate_cbor_bytes};

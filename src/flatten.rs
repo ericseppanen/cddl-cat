@@ -9,7 +9,8 @@
 
 use crate::ivt::*;
 use crate::util::{make_oops, ValidateError};
-use crate::ast::{self, parse_cddl};
+use crate::ast;
+use crate::parser::parse_cddl;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 
