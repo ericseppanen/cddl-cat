@@ -19,12 +19,23 @@ use std::fmt;
 #[derive(Debug, Copy, Clone)]
 #[allow(missing_docs)]
 pub enum PreludeType {
+    /// Any type or embedded data structure
     Any,
+    /// Nil aka null: nothing.
+    Nil,
+    /// A boolean value: true or false
     Bool,
+    /// A positive or negative integer
     Int,
+    /// An integer >= 0
     Uint,
+    /// An integer < 0
+    Nint,
+    /// A floating-point value
     Float,
+    /// A text string
     Tstr,
+    /// A byte string
     Bstr,
 }
 

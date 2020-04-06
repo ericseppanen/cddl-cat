@@ -41,6 +41,10 @@
 //! let cddl_input = "thing = {name: tstr, age: int}";
 //! validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
 //! ```
+//! Supported prelude types:
+//! - `any`, `uint`, `nint`, `int`, `bstr`, `bytes`, `tstr`, `text`
+//! - `float`, `float16`, `float32`, `float64`, `float16-32`, `float32-64` \
+//! Note: float sizes are not validated.
 //!
 //! Unimplemented features:
 //! - Generics
@@ -56,6 +60,7 @@
 //! - Literal integers with `0x` or `0b`
 //! - Hexfloat
 //! - Base64 bytestring literals (`b64'...'`)
+//! - Prelude types that invoke CBOR tags (e.g. `tdate` or `biguint`)
 //!
 //! [`Node`]: ivt::Node
 //! [RFC8610]: https://tools.ietf.org/html/rfc8610

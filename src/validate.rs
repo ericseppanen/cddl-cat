@@ -157,12 +157,16 @@ fn map_search(node: &Node, working_map: &mut WorkingMap, ctx: &dyn Context) -> T
 fn validate_prelude_type(ty: PreludeType, value: &Value) -> ValidateResult {
     match (ty, value) {
         (PreludeType::Any, _) => Ok(()),
+        (PreludeType::Nil, Value::Null) => Ok(()),
+        (PreludeType::Nil, _) => make_oops("bad nil"),
         (PreludeType::Bool, Value::Bool(_)) => Ok(()),
         (PreludeType::Bool, _) => make_oops("bad int"),
         (PreludeType::Int, Value::Integer(_)) => Ok(()),
         (PreludeType::Int, _) => make_oops("bad int"),
         (PreludeType::Uint, Value::Integer(x)) if *x >= 0 => Ok(()),
         (PreludeType::Uint, _) => make_oops("bad uint"),
+        (PreludeType::Nint, Value::Integer(x)) if *x < 0 => Ok(()),
+        (PreludeType::Nint, _) => make_oops("bad nint"),
         (PreludeType::Float, Value::Float(_)) => Ok(()),
         (PreludeType::Float, _) => make_oops("bad float"),
         (PreludeType::Tstr, Value::Text(_)) => Ok(()),

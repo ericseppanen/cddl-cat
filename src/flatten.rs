@@ -95,18 +95,82 @@ fn flatten_type2(ty2: &ast::Type2) -> FlattenResult<Node> {
 }
 
 fn flatten_typename(name: &str) -> FlattenResult<Node> {
+    let unsupported = |s: &str| -> FlattenResult<Node> {
+        let msg = format!("prelude type '{}' not supported", s);
+        make_oops(msg)
+    };
+
     let result = match name {
         "any" => Node::PreludeType(PreludeType::Any),
+        "nil" | "null" => Node::PreludeType(PreludeType::Nil),
         "bool" => Node::PreludeType(PreludeType::Bool),
         "false" => literal_bool(false),
         "true" => literal_bool(true),
         "int" => Node::PreludeType(PreludeType::Int),
         "uint" => Node::PreludeType(PreludeType::Uint),
+        "nint" => Node::PreludeType(PreludeType::Nint),
         "float" => Node::PreludeType(PreludeType::Float),
-        "tstr" => Node::PreludeType(PreludeType::Tstr),
-        "bstr" => Node::PreludeType(PreludeType::Bstr),
-        // FIXME: lots more prelude types to handle...
-        // FIXME: this could be a group name, maybe other things?
+        "tstr" | "text" => Node::PreludeType(PreludeType::Tstr),
+        "bstr" | "bytes" => Node::PreludeType(PreludeType::Bstr),
+
+        // FIXME: need to store the "additional information" bits that will
+        // preserve the expected floating-point size.  For now, just pretend
+        // that all floats are the same.
+        "float16" | "float32" | "float64" | "float16-32" | "float32-64" => {
+            Node::PreludeType(PreludeType::Float)
+        }
+
+        // The remaining prelude types are specified using CBOR (major, ai)
+        // pairs.  These types can only be used with CBOR (not JSON).
+
+        // FIXME: preserve more information about these types so that a JSON
+        // validator knows to reject them, and a CBOR validator has some chance
+        // at further validation.
+
+        // CBOR types that are stored as "tstr":
+        // tdate = #6.0(tstr)
+        // uri = #6.32(tstr)
+        // b64url = #6.33(tstr)
+        // b64legacy = #6.34(tstr)
+        // regexp = #6.35(tstr)
+        // mime-message = #6.36(tstr)
+        "tdate" | "uri" | "b64url" | "b64legacy" | "regexp" | "mime-message" => {
+            Node::PreludeType(PreludeType::Tstr)
+        }
+
+        // CBOR types that are stored as "bstr":
+        // biguint = #6.2(bstr)
+        // bignint = #6.3(bstr)
+        // encoded-cbor = #6.24(bstr)
+        "biguint" | "bignint" | "encoded-cbor" => Node::PreludeType(PreludeType::Bstr),
+
+        // CBOR types that are stored as "any":
+        // eb64url = #6.21(any)
+        // eb64legacy = #6.22(any)
+        // eb16 = #6.23(any)
+        // cbor-any = #6.55799(any)
+        "eb64url" | "eb64legacy" | "eb16" | "cbor-any" => Node::PreludeType(PreludeType::Any),
+
+        // CBOR types that are stored as "number":
+        // time = #6.1(number)
+        "time" => return unsupported(name),
+
+        // CBOR types that are choices of other types:
+        // bigint = biguint / bignint
+        // integer = int / bigint
+        // unsigned = uint / biguint
+        // number = int / float
+        "bigint" | "integer" | "unsigned" | "number" => return unsupported(name),
+
+        // Other miscellaneous prelude types:
+        // decfrac = #6.4([e10: int, m: integer])
+        // bigfloat = #6.5([e2: int, m: integer])
+        // undefined = #7.23
+        "decfrac" | "bigfloat" | "undefined" => return unsupported(name),
+
+        // We failed to find this string in the standard prelude, so we will
+        // assume it's a rule or group identifier.  No further validation is
+        // done at this time.
         _ => Node::Rule(Rule::new(name)),
     };
     Ok(result)
