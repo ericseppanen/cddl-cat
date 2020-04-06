@@ -3,6 +3,13 @@
 //! The only public items here are the function [`parse_cddl`] and the error
 //! [`ParseError`] and its child enum [`ErrorKind`].
 //!
+//! # Examples
+//! ```
+//! use cddl_cat::parse_cddl;
+//!
+//! let input = "map = { name: tstr }";
+//! assert!(parse_cddl(input).is_ok());
+//! ```
 
 use crate::ast::*;
 use nom::{

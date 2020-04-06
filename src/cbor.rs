@@ -1,6 +1,58 @@
-//! This module implements conversions from [`serde_cbor::Value`].
+//! This module implements validation from [`serde_cbor::Value`].
 //!
-//! Validation of data requires converting data to a generic type [`Value`].
+//! # Examples
+//!
+//! ```
+//! use cddl_cat::validate_cbor_bytes;
+//! use serde::Serialize;
+//!
+//! #[derive(Serialize)]
+//! struct PersonStruct {
+//!     name: String,
+//!     age: u32,
+//! }
+//!
+//! let input = PersonStruct {
+//!     name: "Bob".to_string(),
+//!     age: 43,
+//! };
+//! let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+//! let cddl_input = "thing = {name: tstr, age: int}";
+//!
+//! validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
+//! ```
+//!
+//! If the caller wants to reuse the parsed CDDL IVT, replace
+//! `validate_cbor_bytes(...)` with:
+//! ```
+//! # use cddl_cat::validate_cbor_bytes;
+//! use cddl_cat::{cbor::validate_cbor, context::BasicContext, flatten::flatten_from_str};
+//! # use serde::Serialize;
+//! #
+//! # #[derive(Serialize)]
+//! # struct PersonStruct {
+//! #     name: String,
+//! #     age: u32,
+//! # }
+//! #
+//! # let input = PersonStruct {
+//! #     name: "Bob".to_string(),
+//! #     age: 43,
+//! # };
+//! # let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+//! # let cddl_input = "person = {name: tstr, age: int}";
+//!
+//! // Parse the CDDL text and flatten it into IVT form.
+//! let flat_cddl = flatten_from_str(cddl_input).unwrap();
+//! // Create a Context object to store the IVT
+//! let ctx = BasicContext::new(flat_cddl);
+//! // Look up the Rule we want to validate.
+//! let rule_node = ctx.rules.get("person").unwrap();
+//! // Deserialize the CBOR bytes
+//! let cbor_value = serde_cbor::from_slice(&cbor_bytes).unwrap();
+//! // Perform the validation.
+//! validate_cbor(&rule_node, &cbor_value, &ctx).unwrap();
+//! ```
 
 use crate::context::{BasicContext, Context};
 use crate::flatten::flatten_from_str;
