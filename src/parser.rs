@@ -3,6 +3,16 @@
 //! The only public items here are the function [`parse_cddl`] and the error
 //! [`ParseError`] and its child enum [`ErrorKind`].
 //!
+//! Unimplemented features:
+//! - rule with `genericparm`
+//! - extend-type `/=`
+//! - extend-group `//=`
+//! - type1 rangeop and ctlop
+//! - type2 starting with `~`, `&`, `#`
+//! - grpent groupname with `genericarg`
+//! - integers with `0x` and `0b`
+//! - hexfloat
+//! - base64 bytestring literals (`b64'...'`)
 
 use crate::ast::*;
 use std::error;
@@ -15,6 +25,13 @@ use nom::{
     multi::{fold_many0, many0, many1, separated_nonempty_list},
     sequence::{pair, tuple, delimited, preceded, separated_pair, terminated},
 };
+
+//
+// A note on the design of the parser:
+//
+// Parsers built from the "nom" crate look a bit different from most other
+// Rust code; for extra readability there is a lot of extra indents that
+// rustfmt wouldn't like (and rustfmt::skip is applied extensively.)
 
 
 // This error type is used everywhere in this parser.  It allows
@@ -106,6 +123,7 @@ impl<I: Into<String>> nom::error::ParseError<I> for ParseError {
 // CRLF = %x0A / %x0D.0A
 
 // This varies a bit from the RFC, again, with respect to whitespace.
+#[rustfmt::skip]
 fn comment(input: &str) -> JResult<&str, &str> {
     // semicolon, anything, terminated by CR or CR+LF.
     preceded(
@@ -115,6 +133,7 @@ fn comment(input: &str) -> JResult<&str, &str> {
 }
 
 // Any amount of whitespace (including none) (including comments)
+#[rustfmt::skip]
 fn ws(input: &str) -> JResult<&str, &str> {
     let inner = alt((
         // multispace1 includes tabs, which isn't part of the rfc.
@@ -139,6 +158,7 @@ fn test_whitespace() {
 }
 
 // An optional comma and any whitespace surrounding it.
+#[rustfmt::skip]
 fn optcom(input: &str) -> JResult<&str, ()> {
     valuex((), pair(
         ws,
@@ -164,13 +184,14 @@ fn ealpha_char(c: char) -> bool {
     c.is_ascii_alphabetic() || c == '@' || c == '_' || c == '$'
 }
 
-
+#[rustfmt::skip]
 fn ealpha(input: &str) -> JResult<&str, &str> {
     take_while1(ealpha_char)
     (input)
 }
 
 // The tail characters of an ident: *("-" / ".") (EALPHA / DIGIT)
+#[rustfmt::skip]
 fn ident_tail(input: &str) -> JResult<&str, &str> {
     recognize(
         preceded(
@@ -184,6 +205,7 @@ fn ident_tail(input: &str) -> JResult<&str, &str> {
     (input)
 }
 
+#[rustfmt::skip]
 fn ident(input: &str) -> JResult<&str, &str> {
     recognize(
         preceded(
@@ -204,6 +226,7 @@ fn test_ident() {
     assert!(ident("1a").is_err());
 }
 
+#[rustfmt::skip]
 fn uint(input: &str) -> JResult<&str, u64> {
     map_res(digit1, |x: &str| {
         x.parse::<u64>().map_err(|_| {
@@ -214,6 +237,7 @@ fn uint(input: &str) -> JResult<&str, u64> {
 }
 
 // The string representation of a signed integer
+#[rustfmt::skip]
 fn int_str(input: &str) -> JResult<&str, &str> {
     recognize(
         preceded(
@@ -226,6 +250,7 @@ fn int_str(input: &str) -> JResult<&str, &str> {
 
 // "." fraction
 // fraction = 1*DIGIT
+#[rustfmt::skip]
 fn dot_fraction(input: &str) -> JResult<&str, &str> {
     recognize(
         pair(
@@ -238,6 +263,7 @@ fn dot_fraction(input: &str) -> JResult<&str, &str> {
 
 // "e" exponent
 // exponent = ["+"/"-"] 1*DIGIT
+#[rustfmt::skip]
 fn e_exponent(input: &str) -> JResult<&str, &str> {
     recognize(
         tuple((
@@ -251,6 +277,7 @@ fn e_exponent(input: &str) -> JResult<&str, &str> {
 
 // A helper function for converting string -> Value::Float,
 // and mapping to the right error type
+#[rustfmt::skip]
 fn parse_float(s: &str) -> Result<Value, ParseError> {
     match s.parse::<f64>() {
         Ok(fl) => Ok(Value::Float(fl)),
@@ -260,6 +287,7 @@ fn parse_float(s: &str) -> Result<Value, ParseError> {
 
 // A helper function for converting string -> Value::Xint,
 // and mapping to the right error type
+#[rustfmt::skip]
 fn parse_int(s: &str) -> Result<Value, ParseError> {
     if s.starts_with('-') {
         match s.parse::<i64>() {
@@ -276,6 +304,7 @@ fn parse_int(s: &str) -> Result<Value, ParseError> {
 
 // int ["." fraction] ["e" exponent ]
 // (must have at least one of the latter two to be a float)
+#[rustfmt::skip]
 fn float_or_int(input: &str) -> JResult<&str, Value> {
     let f = recognize(
         tuple((
@@ -322,7 +351,7 @@ fn test_float_or_int() {
 // Also, byte strings can be concatenated, i.e. 'Hello ' 'world' == 'Hello world'.
 // See the RFC for details.
 
-
+#[rustfmt::skip]
 fn bytestring_utf8(input: &str) -> JResult<&str, &str> {
     delimited(
         charx('\''),
@@ -331,7 +360,7 @@ fn bytestring_utf8(input: &str) -> JResult<&str, &str> {
     )(input)
 }
 
-// FIXME: ignore whitespace
+#[rustfmt::skip]
 fn bytestring_hex(input: &str) -> JResult<&str, &str> {
     delimited(
         tag("h'"),
@@ -358,11 +387,13 @@ fn is_base64_char(c: char) -> bool {
 }
 
 // Zero or more base64 characters
+#[rustfmt::skip]
 fn base64(input: &str) -> JResult<&str, &str> {
     take_while(is_base64_char)
     (input)
 }
 
+#[rustfmt::skip]
 fn bytestring_base64(input: &str) -> JResult<&str, &str> {
     delimited(
         tag("b64'"),
@@ -383,6 +414,7 @@ fn parse_hex(s: &str) -> Result<Vec<u8>, ParseError> {
     })
 }
 
+#[rustfmt::skip]
 fn bytestring(input: &str) -> JResult<&str, Vec<u8>> {
     alt((
         map(bytestring_utf8, |s| s.as_bytes().into()),
@@ -428,12 +460,14 @@ fn is_unescaped_schar(c: char) -> bool {
 }
 
 // One or more unescaped text characters
+#[rustfmt::skip]
 fn unescaped_schar(input: &str) -> JResult<&str, &str> {
     take_while1(is_unescaped_schar)
     (input)
 }
 
 // A single escaped character
+#[rustfmt::skip]
 fn sesc(input: &str) -> JResult<&str, &str> {
     // FIXME: allow only (%x20-7E / %x80-10FFFD)
     preceded(charx('\\'), recognize(anychar))
@@ -441,6 +475,7 @@ fn sesc(input: &str) -> JResult<&str, &str> {
 }
 
 // Zero or more text characters
+#[rustfmt::skip]
 fn schar(input: &str) -> JResult<&str, &str> {
     recognize(
         many0(
@@ -453,6 +488,7 @@ fn schar(input: &str) -> JResult<&str, &str> {
     (input)
 }
 
+#[rustfmt::skip]
 fn text_literal(input: &str) -> JResult<&str, &str> {
     delimited(
         charx('"'),
@@ -488,6 +524,7 @@ fn test_text() {
 
 // value = number / text / bytes
 // number = hexfloat / (int ["." fraction] ["e" exponent ])
+#[rustfmt::skip]
 fn value(input: &str) -> JResult<&str, Value> {
     alt((
         float_or_int,
@@ -503,27 +540,11 @@ fn test_value() {
     assert!(value("abc").is_err());
 }
 
-
-// grpent = [occur S] [memberkey S] type
-//        / [occur S] groupname [genericarg]  ; preempted by above
-//        / [occur S] "(" S group S ")"
-
-
-// pub enum GrpEntVal {
-//     Member(Member),
-//     Groupname(String),
-//     Parenthesized(Group),
-// }
-
-// pub struct GrpEnt {
-//     occur: Occur,
-//     val: GrpEntVal,
-// }
-
 // memberkey = type1 S ["^" S] "=>"
 //           / bareword S ":"
 //           / value S ":"
 
+#[rustfmt::skip]
 fn memberkey_type1(input: &str) -> JResult<&str, MemberKey> {
     let f = tuple((
         terminated(type1, ws),
@@ -537,6 +558,7 @@ fn memberkey_type1(input: &str) -> JResult<&str, MemberKey> {
     (input)
 }
 
+#[rustfmt::skip]
 fn memberkey_bareword(input: &str) -> JResult<&str, MemberKey> {
     let f = separated_pair(
         ident,
@@ -560,7 +582,7 @@ fn test_memberkey_bareword() {
     );
 }
 
-
+#[rustfmt::skip]
 fn memberkey_value(input: &str) -> JResult<&str, MemberKey> {
     let f = separated_pair(
         value,
@@ -574,6 +596,7 @@ fn memberkey_value(input: &str) -> JResult<&str, MemberKey> {
     (input)
 }
 
+#[rustfmt::skip]
 fn memberkey(input: &str) -> JResult<&str, MemberKey> {
     alt((
         memberkey_type1,
@@ -583,21 +606,8 @@ fn memberkey(input: &str) -> JResult<&str, MemberKey> {
     (input)
 }
 
-// #[derive(Debug, PartialEq)]
-// pub enum MemberKeyVal {
-//     Type1(Type1),
-//     Bareword(String),
-//     Value(Value),
-// }
-//
-// #[derive(Debug, PartialEq)]
-// pub struct MemberKey {
-//     val: MemberKeyVal,
-//     cut: bool,
-// }
-
-
 // [memberkey S] type
+#[rustfmt::skip]
 fn grpent_member(input: &str) -> JResult<&str, Member> {
     let f = pair(
         terminated(opt(memberkey), ws),
@@ -624,6 +634,7 @@ fn test_member() {
     );
 }
 
+#[rustfmt::skip]
 fn grpent_parens(input: &str) -> JResult<&str, Group> {
     delimited(
         charx('('),
@@ -646,6 +657,7 @@ fn test_grpent_parens() {
     );
 }
 
+#[rustfmt::skip]
 fn grpent_val(input: &str) -> JResult<&str, GrpEntVal> {
     alt((
         map(grpent_member, GrpEntVal::Member),
@@ -676,6 +688,7 @@ fn test_grpent_val() {
 // occur = [uint] "*" [uint]
 //       / "+"
 //       / "?"
+#[rustfmt::skip]
 fn occur_star(input: &str) -> JResult<&str, Occur> {
     let f = tuple((
         opt(uint),
@@ -704,6 +717,7 @@ fn occur_star(input: &str) -> JResult<&str, Occur> {
     (input)
 }
 
+#[rustfmt::skip]
 fn occur(input: &str) -> JResult<&str, Occur> {
     alt((
         occur_star,
@@ -727,6 +741,7 @@ fn test_occur() {
 //        / [occur S] groupname [genericarg]  ; preempted by above
 //        / [occur S] "(" S group S ")"
 
+#[rustfmt::skip]
 fn grpent(input: &str) -> JResult<&str, GrpEnt> {
     let f = pair(
         opt(terminated(occur, ws)),
@@ -755,6 +770,7 @@ fn test_grpent() {
 }
 
 // grpchoice = zero-or-more "grpent optional-comma"
+#[rustfmt::skip]
 fn grpchoice(input: &str) -> JResult<&str, GrpChoice> {
     let f = many0(
         terminated(grpent, optcom)
@@ -774,6 +790,7 @@ fn test_grpchoice_empty() {
 }
 
 // group = grpchoice *(S "//" S grpchoice)
+#[rustfmt::skip]
 fn group(input: &str) -> JResult<&str, Group> {
 
     // It would have been great to write this as
@@ -813,7 +830,7 @@ fn test_group_empty() {
     );
 }
 
-
+#[rustfmt::skip]
 fn type2_parens(input: &str) -> JResult<&str, Type> {
     delimited(
         charx('('),
@@ -826,6 +843,7 @@ fn type2_parens(input: &str) -> JResult<&str, Type> {
     )(input)
 }
 
+#[rustfmt::skip]
 fn type2_map(input: &str) -> JResult<&str, Group> {
     delimited(
         charx('{'),
@@ -838,6 +856,7 @@ fn type2_map(input: &str) -> JResult<&str, Group> {
     )(input)
 }
 
+#[rustfmt::skip]
 fn type2_array(input: &str) -> JResult<&str, Group> {
     delimited(
         charx('['),
@@ -853,6 +872,7 @@ fn type2_array(input: &str) -> JResult<&str, Group> {
 // type2 = value
 //         typename
 //         { group }
+#[rustfmt::skip]
 fn type2(input: &str) -> JResult<&str, Type2> {
     alt((
         map(value, Type2::Value),
@@ -870,6 +890,7 @@ fn type1(input: &str) -> JResult<&str, Type1> {
 }
 
 // type = type1 [ / type1 ... ]  (skipping over type1 for now)
+#[rustfmt::skip]
 fn ty(input: &str) -> JResult<&str, Type> {
     let f = separated_nonempty_list(
         delimited(ws, tag("/"), ws),
@@ -893,22 +914,10 @@ fn ty(input: &str) -> JResult<&str, Type> {
 //    //= grpent
 //
 
-// #[derive(Debug, PartialEq)]
-// pub struct Rule {
-//     pub name: String,
-//     pub val: RuleVal,
-// }
-//
-// #[derive(Debug, PartialEq)]
-// pub enum RuleVal {
-//     AssignType(Type),
-//     AssignGroup(GrpEnt),
-//     // TODO: /= and //= operators --> ExtendType(Type), ExtendGroup(GrpEnt)
-// }
-
 // This is the right side of a rule: one of:
 //     assignt S type
 //     assigng S grpent
+#[rustfmt::skip]
 fn rule_val(input: &str) -> JResult<&str, RuleVal> {
     let f = separated_pair(
         tag("="),
@@ -924,6 +933,7 @@ fn rule_val(input: &str) -> JResult<&str, RuleVal> {
     (input)
 }
 
+#[rustfmt::skip]
 fn rule(input: &str) -> JResult<&str, Rule> {
     let f = separated_pair(
         ident,
@@ -935,6 +945,7 @@ fn rule(input: &str) -> JResult<&str, Rule> {
 }
 
 // cddl = S 1*(rule S)
+#[rustfmt::skip]
 fn cddl(input: &str) -> JResult<&str, Cddl> {
     let f = preceded(ws,
         many1(
@@ -944,20 +955,6 @@ fn cddl(input: &str) -> JResult<&str, Cddl> {
     map(f, |r| Cddl{rules: r})
     (input)
 }
-
-// MISSING:
-// genericparm
-// extend-type "/="
-// extend-group "//="
-// type1
-// type2 starting with ~ & #
-// rangeop
-// ctlop
-// grpent groupname with genericarg
-// uint (with 0x and 0b), int
-// byte literals
-// number, hexfloat
-
 
 /// The main entry point for parsing CDDL text.
 ///
