@@ -123,7 +123,7 @@ pub struct Group(pub Vec<GrpChoice>);
 /// Type2 is the main representation of a CDDL type.
 ///
 /// Note: not all type2 syntax is implemented.
-/// Types starting with `~` `&` `#` are not yet supported.
+/// Types starting with `&`, `#` are not yet supported.
 ///
 /// CDDL ABNF grammar:
 /// ```text

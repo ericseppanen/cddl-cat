@@ -3,8 +3,12 @@
 //! **Note:** This library is fairly new, and may still contain significant
 //! bugs, ommissions, or unstable interfaces.
 //!
-//! The goal of this library is to make individual encodings (like CBOR or
-//! JSON) easy to validate.
+//! CDDL is a text document described by [RFC8610] that describes data
+//! structures.  CDDL is not tied to any specific serialization or encoding
+//! method; it can be used to validate data that is in [CBOR] or JSON format.
+//!
+//! The goal of this library is to make CBOR or JSON data easy to validate
+//! against a CDDL schema description.
 //!
 //! Some of the ways this library differs from other implementations:
 //!
@@ -54,6 +58,8 @@
 //! - Base64 bytestring literals (`b64'...'`)
 //!
 //! [`Node`]: ivt::Node
+//! [RFC8610]: https://tools.ietf.org/html/rfc8610
+//! [CBOR]: https://cbor.io/
 
 #![warn(missing_docs)]
 

@@ -20,7 +20,7 @@ type RulesByName = BTreeMap<String, Node>;
 /// The result of a flatten operation.
 pub type FlattenResult<T> = std::result::Result<T, ValidateError>;
 
-/// Convert a CDDL schema in UTF-8 form into a (name, rules) map.
+/// Convert a CDDL schema in UTF-8 form into a (name, rule) map.
 pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
     let cddl = parse_cddl(cddl_input).map_err(|e| {
         let msg = format!("cddl parse error: {}", e);

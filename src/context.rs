@@ -1,4 +1,4 @@
-//! This module defines the Context trait
+//! This module defines the Context trait.
 //!
 //! A [`Context`] is used to specify runtime behavior for validation.
 //! When a validation needs to resolve a rule reference, it will ask the
