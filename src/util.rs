@@ -6,9 +6,9 @@ use std::fmt;
 use std::result::Result;
 
 /// A basic error type that contains a string.
-#[derive(Debug, Clone)]
 #[allow(missing_docs)]
-#[non_exhaustive]
+#[rustversion::attr(since(1.40), non_exhaustive)]
+#[derive(Debug, Clone)]
 pub enum ValidateError {
     Oops(String),
 }
