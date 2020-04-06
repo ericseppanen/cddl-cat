@@ -44,7 +44,7 @@ impl Context for BasicContext {
     fn lookup_rule<'a>(&'a self, name: &str) -> LookupResult<'a> {
         match self.rules.get(name) {
             Some(node) => Ok(node),
-            None => make_oops(&format!("tried to access nonexistent rule '{}'", name)),
+            None => make_oops(format!("tried to access nonexistent rule '{}'", name)),
         }
     }
 }

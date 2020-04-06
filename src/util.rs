@@ -32,7 +32,7 @@ impl error::Error for ValidateError {
 ///
 /// This crate doesn't generate useful errors yet.  This is a simple substitute until
 /// it does.
-pub(crate) fn make_oops<T>(msg: &str) -> Result<T, ValidateError> {
+pub(crate) fn make_oops<T, S: Into<String>>(msg: S) -> Result<T, ValidateError> {
     Err(ValidateError::Oops(msg.into()))
 }
 

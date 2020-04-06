@@ -487,6 +487,6 @@ fn validate_standalone_group(g: &Group, value: &Value, ctx: &dyn Context) -> Val
             // Since our group has length 1, validate against that single element.
             validate(value, &g.members[0], ctx)
         }
-        _ => make_oops(&format!("can't validate complex standalone group {:?}", g)),
+        _ => make_oops(format!("can't validate complex standalone group {:?}", g)),
     }
 }
