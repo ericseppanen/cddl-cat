@@ -700,7 +700,7 @@ fn occur_star(input: &str) -> JResult<&str, Occur> {
             };
             let upper: usize = match tup.2 {
                 Some(n) => n as usize,
-                None => usize::MAX,
+                None => std::usize::MAX,
             };
             Occur::Numbered(lower, upper)
         }
@@ -724,7 +724,7 @@ fn test_occur() {
     assert_eq!(occur("+"), Ok(("", Occur::OneOrMore)));
     assert_eq!(occur("*"), Ok(("", Occur::ZeroOrMore)));
     assert_eq!(occur("*9"), Ok(("", Occur::Numbered(0, 9))));
-    assert_eq!(occur("7*"), Ok(("", Occur::Numbered(7, usize::MAX))));
+    assert_eq!(occur("7*"), Ok(("", Occur::Numbered(7, std::usize::MAX))));
     assert_eq!(occur("7*9"), Ok(("", Occur::Numbered(7, 9))));
 }
 

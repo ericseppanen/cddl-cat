@@ -167,8 +167,8 @@ impl Occur {
     pub fn limits(&self) -> (usize, usize) {
         match self.limit {
             OccurLimit::Optional => (0, 1),
-            OccurLimit::ZeroOrMore => (0, usize::MAX),
-            OccurLimit::OneOrMore => (1, usize::MAX),
+            OccurLimit::ZeroOrMore => (0, std::usize::MAX),
+            OccurLimit::OneOrMore => (1, std::usize::MAX),
             OccurLimit::Numbered(n, m) => (n, m),
         }
     }
