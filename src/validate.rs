@@ -277,9 +277,7 @@ fn validate_array_unwrap(
             // All array members validated Ok.
             Ok(())
         }
-        _ => {
-            make_oops("unwrap found non-array type")
-        }
+        _ => make_oops("unwrap found non-array type"),
     }
 }
 
@@ -431,9 +429,7 @@ fn validate_map_unwrap(
             // All array members validated Ok.
             Ok(())
         }
-        _ => {
-            make_oops("unwrap found non-map type")
-        }
+        _ => make_oops("unwrap found non-map type"),
     }
 }
 
