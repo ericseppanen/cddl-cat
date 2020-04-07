@@ -67,6 +67,7 @@
 //! [CBOR]: https://cbor.io/
 
 #![warn(missing_docs)]
+#![forbid(unsafe_code)]
 
 pub mod ast;
 pub mod cbor;
