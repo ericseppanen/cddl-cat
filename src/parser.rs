@@ -89,7 +89,7 @@ impl error::Error for ParseError {
 impl From<nom::Err<ParseError>> for ParseError {
     fn from(e: nom::Err<ParseError>) -> ParseError {
         match e {
-            nom::Err::Incomplete(_) => unimplemented!(),
+            nom::Err::Incomplete(_) => parse_error(Unparseable, "Incomplete"),
             nom::Err::Error(pe) => pe,
             nom::Err::Failure(pe) => pe,
         }
