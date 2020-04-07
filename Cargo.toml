@@ -1,7 +1,7 @@
 [package]
 name = "cddl-cat"
-description = "Parse CDDL and validate serialized data"
-keywords = ["cddl", "cbor"]
+description = "Parse CDDL schemas and validate CBOR or JSON serialized data"
+keywords = ["cddl", "cbor", "json"]
 categories = ["encoding", "network-programming", "parser-implementations"]
 version = "0.2.0"
 repository = "https://github.com/ericseppanen/cddl-cat"
