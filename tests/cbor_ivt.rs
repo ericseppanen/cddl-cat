@@ -1,3 +1,5 @@
+#![cfg(feature = "serde_cbor")]
+
 use cddl_cat::cbor::validate_cbor;
 use cddl_cat::context::{tests::DummyContext, BasicContext, RulesByName};
 use cddl_cat::ivt::*;

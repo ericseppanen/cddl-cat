@@ -10,9 +10,16 @@ authors = ["Eric Seppanen <eds@reric.net>"]
 readme = "README.md"
 edition = "2018"
 
+[features]
+# The default set of optional packages. Most people will want to use these
+# packages, but they are strictly optional. Note that `session` is not a package
+# but rather another feature listed in this manifest.
+default = ["serde_json", "serde_cbor"]
+
 [dependencies]
 float-ord = "0.2"
-serde_cbor = "0.11"
+serde_cbor = { version = "0.11", optional = true }
+serde_json = { version = "1.0.51", optional = true }
 serde = "1.0"
 # nom's default-features are ["std", "lexical"].
 nom = { version = "5.1.1", features = ["std"], default-features = false }

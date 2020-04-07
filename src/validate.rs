@@ -42,6 +42,9 @@ impl WorkingArray {
     }
 }
 
+// Prevent warnings if both serde_cbor and serde_json are disabled.
+#[allow(dead_code)]
+
 // This is the main validation dispatch function.
 // It tries to match a Node and a Value, recursing as needed.
 pub(crate) fn validate(value: &Value, node: &Node, ctx: &dyn Context) -> ValidateResult {

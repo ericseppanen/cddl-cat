@@ -1,3 +1,5 @@
+#![cfg(feature = "serde_cbor")]
+
 use cddl_cat::cbor::validate_cbor_bytes;
 use serde::{Deserialize, Serialize};
 

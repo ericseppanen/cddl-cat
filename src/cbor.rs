@@ -17,9 +17,9 @@
 //!     age: 43,
 //! };
 //! let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
-//! let cddl_input = "thing = {name: tstr, age: int}";
+//! let cddl_input = "person = {name: tstr, age: int}";
 //!
-//! validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
+//! validate_cbor_bytes("person", cddl_input, &cbor_bytes).unwrap();
 //! ```
 //!
 //! If the caller wants to reuse the parsed CDDL IVT, replace
@@ -53,6 +53,8 @@
 //! // Perform the validation.
 //! validate_cbor(&rule_node, &cbor_value, &ctx).unwrap();
 //! ```
+
+#![cfg(feature = "serde_cbor")]
 
 use crate::context::{BasicContext, Context};
 use crate::flatten::flatten_from_str;
