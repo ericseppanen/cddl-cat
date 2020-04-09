@@ -118,6 +118,7 @@ pub mod flatten;
 pub mod ivt;
 pub mod parser;
 pub mod util;
+pub use util::{ValidateError, ValidateResult};
 pub(crate) mod validate;
 pub mod value;
 
