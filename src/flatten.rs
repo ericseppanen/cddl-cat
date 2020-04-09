@@ -10,7 +10,7 @@
 use crate::ast;
 use crate::ivt::*;
 use crate::parser::parse_cddl;
-use crate::util::{make_oops, ValidateError};
+use crate::util::ValidateError;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
 
@@ -22,10 +22,7 @@ pub type FlattenResult<T> = std::result::Result<T, ValidateError>;
 
 /// Convert a CDDL schema in UTF-8 form into a (name, rule) map.
 pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
-    let cddl = parse_cddl(cddl_input).map_err(|e| {
-        let msg = format!("cddl parse error: {}", e);
-        ValidateError::Oops(msg)
-    })?;
+    let cddl = parse_cddl(cddl_input).map_err(|pe| ValidateError::ParseError(pe))?;
     flatten(&cddl)
 }
 
@@ -53,7 +50,9 @@ fn flatten_type(ty: &ast::Type) -> FlattenResult<Node> {
     let options = options?;
 
     match options.len() {
-        0 => make_oops("flatten type with 0 options"),
+        0 => Err(ValidateError::Unsupported(
+            "flatten type with 0 options".into(),
+        )),
         1 => Ok(options.into_iter().next().unwrap()),
         _ => Ok(Node::Choice(Choice { options })),
     }
@@ -90,14 +89,13 @@ fn flatten_type2(ty2: &ast::Type2) -> FlattenResult<Node> {
         Type2::Map(g) => flatten_map(&g),
         Type2::Array(g) => flatten_array(&g),
         Type2::Unwrap(r) => Ok(Node::Unwrap(Rule::new(r))),
-        //_ => make_oops("unimplemented Type2 variant"),
     }
 }
 
 fn flatten_typename(name: &str) -> FlattenResult<Node> {
     let unsupported = |s: &str| -> FlattenResult<Node> {
-        let msg = format!("prelude type '{}' not supported", s);
-        make_oops(msg)
+        let msg = format!("prelude type '{}'", s);
+        Err(ValidateError::Unsupported(msg))
     };
 
     let result = match name {
@@ -288,11 +286,16 @@ fn flatten_member(member: &ast::Member) -> FlattenResult<Node> {
 }
 
 // try_into(), remapping the error.
-fn num_to_i128<T: TryInto<i128>>(n: T) -> FlattenResult<i128> {
+fn num_to_i128<T>(n: T) -> FlattenResult<i128>
+where
+    T: TryInto<i128> + std::fmt::Display + Copy,
+{
     // This error doesn't seem possible, since isize and usize should always
     // fit into an i128.
-    n.try_into()
-        .map_err(|_| ValidateError::Oops("try_into<i128> failed".to_string()))
+    n.try_into().map_err(|_| {
+        let msg = format!("integer conversion failed: {}", n);
+        ValidateError::Structural(msg.into())
+    })
 }
 
 fn flatten_memberkey(memberkey: &ast::MemberKey) -> FlattenResult<Node> {

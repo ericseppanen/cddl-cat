@@ -59,7 +59,7 @@
 use crate::context::{BasicContext, Context};
 use crate::flatten::flatten_from_str;
 use crate::ivt::Node;
-use crate::util::{make_oops, ValidateError, ValidateResult};
+use crate::util::{ValidateError, ValidateResult};
 use crate::validate::validate;
 use crate::value::Value;
 use serde_cbor::Value as CBOR_Value;
@@ -100,7 +100,9 @@ impl TryFrom<&CBOR_Value> for Value {
             _ => {
                 // cbor::Value has a few hidden internal variants.  We should
                 // never see them, but return an error if we do.
-                return make_oops("can't handle hidden cbor Value");
+                return Err(ValidateError::ValueError(
+                    "can't handle hidden cbor Value".into(),
+                ));
             }
         };
         Ok(result)
@@ -129,16 +131,14 @@ pub fn validate_cbor_bytes(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResul
     let ctx = BasicContext::new(flat_cddl);
 
     // Find the rule name that was requested
-    let rule_node: &Node = ctx.rules.get(name).ok_or_else(|| {
-        let msg = format!("rule/group lookup failure: {}", name);
-        ValidateError::Oops(msg)
-    })?;
+    let rule_node: &Node = ctx
+        .rules
+        .get(name)
+        .ok_or_else(|| ValidateError::MissingRule(name.into()))?;
 
     // Deserialize the CBOR bytes
-    let cbor_value: CBOR_Value = serde_cbor::from_slice(cbor).map_err(|e| {
-        let msg = format!("cbor parsing failed: {}", e);
-        ValidateError::Oops(msg)
-    })?;
+    let cbor_value: CBOR_Value =
+        serde_cbor::from_slice(cbor).map_err(|e| ValidateError::ValueError(format!("{}", e)))?;
 
     // Convert the CBOR tree into a Value tree for validation
     let value = Value::try_from(cbor_value)?;

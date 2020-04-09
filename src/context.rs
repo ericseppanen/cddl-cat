@@ -6,7 +6,7 @@
 //!
 
 use crate::ivt::Node;
-use crate::util::{make_oops, ValidateError};
+use crate::util::ValidateError;
 use std::collections::BTreeMap;
 
 /// This type is used in BasicContext to perform rule lookups.
@@ -44,7 +44,7 @@ impl Context for BasicContext {
     fn lookup_rule<'a>(&'a self, name: &str) -> LookupResult<'a> {
         match self.rules.get(name) {
             Some(node) => Ok(node),
-            None => make_oops(format!("tried to access nonexistent rule '{}'", name)),
+            None => Err(ValidateError::MissingRule(name.into())),
         }
     }
 }
@@ -52,7 +52,7 @@ impl Context for BasicContext {
 #[doc(hidden)] // Only pub for integration tests
 #[allow(missing_docs)]
 pub mod tests {
-    use super::{make_oops, Context, LookupResult};
+    use super::{ValidateError, Context, LookupResult};
 
     /// A [Context] that fails all rule lookups
     pub struct DummyContext {}
@@ -65,8 +65,8 @@ pub mod tests {
     }
 
     impl Context for DummyContext {
-        fn lookup_rule<'a>(&'a self, _name: &str) -> LookupResult<'a> {
-            make_oops("DummyContext lookup_rule failure")
+        fn lookup_rule<'a>(&'a self, name: &str) -> LookupResult<'a> {
+            Err(ValidateError::MissingRule(name.into()))
         }
     }
 }

@@ -40,7 +40,8 @@ fn validate_cbor_null() {
     let cddl_input = r#"thing = nil"#;
     validate_cbor_bytes("thing", cddl_input, cbor::NULL).unwrap();
     validate_cbor_bytes("thing", cddl_input, cbor::INT_0).unwrap_err();
-    validate_cbor_bytes("thing", cddl_input, cbor::BOOL_FALSE).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::BOOL_FALSE).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected nil)");
 }
 
 #[test]
@@ -48,14 +49,16 @@ fn validate_cbor_bool() {
     let cddl_input = r#"thing = true"#;
     validate_cbor_bytes("thing", cddl_input, cbor::BOOL_TRUE).unwrap();
     validate_cbor_bytes("thing", cddl_input, cbor::BOOL_FALSE).unwrap_err();
-    validate_cbor_bytes("thing", cddl_input, cbor::NULL).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::NULL).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected Bool(true))");
 }
 
 #[test]
 fn validate_cbor_float() {
     let cddl_input = r#"thing = 0.0"#;
     validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_0_0).unwrap();
-    validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_1_0).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_1_0).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected Float(0.0))");
 
     let cddl_input = r#"thing = float"#;
     validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_1_0).unwrap();
@@ -91,7 +94,8 @@ fn validate_cbor_choice() {
     validate_cbor_bytes("thing", cddl_input, cbor::INT_23).unwrap();
     validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_1_0).unwrap();
     validate_cbor_bytes("thing", cddl_input, cbor::TEXT_IETF).unwrap();
-    validate_cbor_bytes("thing", cddl_input, cbor::BOOL_TRUE).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::BOOL_TRUE).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected choice of 2)");
 }
 
 #[test]
@@ -122,7 +126,8 @@ fn validate_cbor_textstring() {
         validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).unwrap();
         validate_cbor_bytes("thing", cddl_input, cbor::TEXT_IETF).unwrap();
         validate_cbor_bytes("thing", cddl_input, cbor::TEXT_CJK).unwrap();
-        validate_cbor_bytes("thing", cddl_input, cbor::BYTES_EMPTY).unwrap_err();
+        let err = validate_cbor_bytes("thing", cddl_input, cbor::BYTES_EMPTY).unwrap_err();
+        assert_eq!(err.to_string(), "Mismatch(expected tstr)");
     }
 }
 
@@ -133,7 +138,8 @@ fn validate_cbor_bytestring() {
         validate_cbor_bytes("thing", cddl_input, cbor::BYTES_EMPTY).unwrap();
         validate_cbor_bytes("thing", cddl_input, cbor::BYTES_1234).unwrap();
         validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).unwrap_err();
-        validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+        let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+        assert_eq!(err.to_string(), "Mismatch(expected bstr)");
     }
 
     let cddl_input = r#"thing = h'01020304'"#;
@@ -145,10 +151,16 @@ fn validate_cbor_array() {
     let cddl_input = r#"thing = []"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap();
     validate_cbor_bytes("thing", cddl_input, cbor::NULL).unwrap_err();
-    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected shorter array)");
 
     let cddl_input = r#"thing = [1, 2, 3]"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "Mismatch(expected array element Literal(Int(1)))"
+    );
 }
 
 // These data structures exist so that we can serialize some more complex
@@ -192,19 +204,30 @@ fn validate_cbor_homogenous_array() {
     let cddl_input = r#"thing = [* int]"#; // zero or more
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap();
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
+
     let cddl_input = r#"thing = [+ int]"#; // one or more
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
-    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap_err();
+    // FIXME: this error is needlessly verbose.
+    assert_eq!(
+        err.to_string(),
+        "Mismatch(expected more array element Occur { limit: OneOrMore, node: PreludeType(Int) })"
+    );
+
     let cddl_input = r#"thing = [? int]"#; // zero or one
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap();
     let cbor_bytes = serde_cbor::to_vec(&[42]).unwrap();
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
-    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected shorter array)");
 
     let cddl_input = r#"thing = [* tstr]"#;
-    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    // FIXME: this error message is confusing.
+    // Having consumed 0 tstr, we find that the array still has values.
+    assert_eq!(err.to_string(), "Mismatch(expected shorter array)");
 
-    // Alias type.  Note the rule we want to validate must come first.
+    // Alias type.
     let cddl_input = r#"thing = [* zipcode]  zipcode = int"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap();
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
@@ -246,7 +269,8 @@ fn validate_cbor_array_groups() {
     // This is incorrectly constructed, because this is a key-value with
     // a group name where the value should be.
     let cddl_input = r#"thing = [a: int, b: bar] bar = (b: int, c: int)"#;
-    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    assert_eq!(err.to_string(), "Unsupported standalone group");
 }
 
 #[test]
@@ -255,6 +279,7 @@ fn validate_cbor_array_unwrap() {
     let cddl_input = r#"header = [a: int, b: int] thing = [~header c: int]"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap_err();
+
     // unwrap something into the tail of an array
     let cddl_input = r#"footer = [a: int, b: int] thing = [c: int ~footer]"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
@@ -270,20 +295,27 @@ fn validate_cbor_array_unwrap() {
     // Fail if we find too few items.
     let cddl_input = r#"header = [a: int] thing = [~header, c: int]"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+
     let cddl_input = r#"footer = [a: int] thing = [c: int, ~footer]"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
 
     // Fail if we don't find enough matching items while unwrapping.
     let cddl_input = r#"footer = [a: int, b: int] thing = [c: int, d: int, ~footer]"#;
-    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "Mismatch(expected array element PreludeType(Int))"
+    );
 
     // Fail if the unwrapped name doesn't resolve.
     let cddl_input = r#"thing = [c: int ~footer]"#;
-    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    assert_eq!(err.to_string(), "MissingRule(footer)");
 
     // Unwrapping a map into an array isn't allowed.
     let cddl_input = r#"header = {a: int, b: int} thing = [~header c: int]"#;
-    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected unwrap array)");
 }
 
 #[test]
@@ -344,7 +376,8 @@ fn validate_cbor_map_unwrap() {
 
     // Unwrapping an array into a map isn't allowed.
     let cddl_input = r#"thing = {name: tstr, ~agroup} agroup = [age: int]"#;
-    validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected unwrap map)");
 }
 
 #[test]
@@ -371,10 +404,12 @@ fn validate_cbor_map_group() {
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
 
     let cddl_input = r#"thing = {name: tstr, agroup} agroup = (wrong: int)"#;
-    validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    assert_eq!(err.to_string(), r#"Mismatch(expected map[Text("wrong")])"#);
 
     let cddl_input = r#"thing = {name: tstr, agroup} agroup = (age: bool)"#;
-    validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected bool)");
 }
 
 #[test]
@@ -397,13 +432,20 @@ fn validate_cbor_map() {
     let cddl_input = r#"thing = {name: tstr, age: int, * minor: bool}"#;
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
     let cddl_input = r#"thing = {name: tstr, age: int, + minor: bool}"#;
-    validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    // FIXME: terrible error formatting.
+    assert_eq!(
+        err.to_string(),
+        r#"Mismatch(expected map[Occur { limit: OneOrMore, node: KeyValue(KeyValue(Literal(Text("minor")), PreludeType(Bool))) }])"#
+    );
 
     let cddl_input = r#"thing = {name: tstr, age: tstr}"#;
-    validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected tstr)");
 
     let cddl_input = r#"thing = {name: tstr}"#;
-    validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected shorter map)");
 
     // "* keytype => valuetype" is the expected syntax for collecting
     // any remaining key/value pairs of the expected type.
@@ -430,10 +472,12 @@ fn validate_cbor_map() {
     // Should fail because the CBOR input has two entries that can't be
     // collected because the key type doesn't match.
     let cddl_input = r#"thing = {* int => any}"#;
-    validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected shorter map)");
 
     let cddl_input = r#"thing = {name: tstr, age: int, minor: bool}"#;
-    validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
+    assert_eq!(err.to_string(), r#"Mismatch(expected map[Text("minor")])"#);
 
     let cddl_input = r#"thing = {x: int, y: int, z: int}"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();

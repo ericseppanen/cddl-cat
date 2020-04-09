@@ -4,7 +4,7 @@
 
 use crate::context::Context;
 use crate::ivt::*;
-use crate::util::*;
+use crate::util::{mismatch, ValidateError, ValidateResult};
 use crate::value::Value;
 use std::collections::BTreeMap; // used in Value::Map
 use std::collections::VecDeque;
@@ -56,9 +56,9 @@ pub(crate) fn validate(value: &Value, node: &Node, ctx: &dyn Context) -> Validat
         Node::Array(a) => validate_array(a, value, ctx),
         Node::Rule(r) => validate_rule(r, value, ctx),
         Node::Group(g) => validate_standalone_group(g, value, ctx),
-        Node::KeyValue(_) => make_oops("unexpected KeyValue"),
-        Node::Occur(_) => make_oops("unexpected Occur"),
-        Node::Unwrap(_) => make_oops("unexpected Unwrap"),
+        Node::KeyValue(_) => Err(ValidateError::Structural("unexpected KeyValue".into())),
+        Node::Occur(_) => Err(ValidateError::Structural("unexpected Occur".into())),
+        Node::Unwrap(_) => Err(ValidateError::Structural("unexpected Unwrap".into())),
     }
 }
 
@@ -85,7 +85,8 @@ pub fn validate_choice(choice: &Choice, value: &Value, ctx: &dyn Context) -> Val
             return Ok(());
         }
     }
-    make_oops("choice failed")
+    let expected = format!("choice of {}", choice.options.len());
+    Err(mismatch(expected))
 }
 
 /// Validate a `Rule` reference
@@ -113,7 +114,7 @@ fn validate_literal(literal: &Literal, value: &Value) -> ValidateResult {
     if *value == Value::from(literal) {
         return Ok(());
     }
-    make_oops("failed validate_literal")
+    Err(mismatch(format!("{:?}", literal)))
 }
 
 fn map_search_literal(literal: &Literal, working_map: &mut WorkingMap) -> TempResult<Value> {
@@ -128,7 +129,7 @@ fn map_search_literal(literal: &Literal, working_map: &mut WorkingMap) -> TempRe
         }
         None => {
             // We didn't find the key; return an error
-            make_oops("failed map_search_literal")
+            Err(mismatch(format!("map[{:?}]", literal)))
         }
     }
 }
@@ -153,7 +154,8 @@ fn map_search(node: &Node, working_map: &mut WorkingMap, ctx: &dyn Context) -> T
         }
     }
     // We searched all the keys without finding a match.  Validation fails.
-    make_oops("failed map_search")
+    // FIXME: node could expand to a giant string.  Need some kind of helper fn?
+    Err(mismatch(format!("map[{:?}]", node)))
 }
 
 // Note `ty` is passed by value because clippy says it's only 1 byte.
@@ -161,21 +163,21 @@ fn validate_prelude_type(ty: PreludeType, value: &Value) -> ValidateResult {
     match (ty, value) {
         (PreludeType::Any, _) => Ok(()),
         (PreludeType::Nil, Value::Null) => Ok(()),
-        (PreludeType::Nil, _) => make_oops("bad nil"),
+        (PreludeType::Nil, _) => Err(mismatch("nil")),
         (PreludeType::Bool, Value::Bool(_)) => Ok(()),
-        (PreludeType::Bool, _) => make_oops("bad int"),
+        (PreludeType::Bool, _) => Err(mismatch("bool")),
         (PreludeType::Int, Value::Integer(_)) => Ok(()),
-        (PreludeType::Int, _) => make_oops("bad int"),
+        (PreludeType::Int, _) => Err(mismatch("int")),
         (PreludeType::Uint, Value::Integer(x)) if *x >= 0 => Ok(()),
-        (PreludeType::Uint, _) => make_oops("bad uint"),
+        (PreludeType::Uint, _) => Err(mismatch("uint")),
         (PreludeType::Nint, Value::Integer(x)) if *x < 0 => Ok(()),
-        (PreludeType::Nint, _) => make_oops("bad nint"),
+        (PreludeType::Nint, _) => Err(mismatch("nint")),
         (PreludeType::Float, Value::Float(_)) => Ok(()),
-        (PreludeType::Float, _) => make_oops("bad float"),
+        (PreludeType::Float, _) => Err(mismatch("float")),
         (PreludeType::Tstr, Value::Text(_)) => Ok(()),
-        (PreludeType::Tstr, _) => make_oops("bad tstr"),
+        (PreludeType::Tstr, _) => Err(mismatch("tstr")),
         (PreludeType::Bstr, Value::Bytes(_)) => Ok(()),
-        (PreludeType::Bstr, _) => make_oops("bad bstr"),
+        (PreludeType::Bstr, _) => Err(mismatch("bstr")),
     }
 }
 
@@ -183,7 +185,7 @@ fn validate_prelude_type(ty: PreludeType, value: &Value) -> ValidateResult {
 fn validate_array(ar: &Array, value: &Value, ctx: &dyn Context) -> ValidateResult {
     match value {
         Value::Array(a) => validate_array_part2(ar, a, ctx),
-        _ => make_oops("expected array, found not-array"),
+        _ => Err(mismatch("array")),
     }
 }
 
@@ -215,7 +217,8 @@ fn validate_array_part2(ar: &Array, value_array: &[Value], ctx: &dyn Context) ->
     } else {
         // If the working map isn't empty, that means we had some extra values
         // that didn't match anything.
-        make_oops("dangling array values")
+        // FIXME: Should this be a unique error type?
+        Err(mismatch("shorter array"))
     }
 }
 
@@ -280,7 +283,7 @@ fn validate_array_unwrap(
             // All array members validated Ok.
             Ok(())
         }
-        _ => make_oops("unwrap found non-array type"),
+        _ => Err(mismatch("unwrap array")),
     }
 }
 
@@ -306,12 +309,14 @@ fn validate_array_occur(
         }
     }
     if count < lower_limit {
-        return make_oops("failure to find array member");
+        // FIXME: this could get pretty ugly.
+        // FIXME: need a helper to print occurrence symbol.
+        return Err(mismatch(format!("more array element {:?}", occur)));
     }
     Ok(())
 }
 
-/// Validate a key-value pair against a mutable working array.
+/// Validate some node against a mutable working array.
 fn validate_array_value(
     node: &Node,
     working_array: &mut WorkingArray,
@@ -324,14 +329,14 @@ fn validate_array_value(
             working_array.array.pop_front();
             Ok(())
         }
-        None => make_oops("failed to find array member"),
+        None => Err(mismatch(format!("array element {:?}", node))),
     }
 }
 
 fn validate_map(m: &Map, value: &Value, ctx: &dyn Context) -> ValidateResult {
     match value {
         Value::Map(vm) => validate_map_part2(m, vm, ctx),
-        _ => make_oops("expected map, found not-a-map"),
+        _ => Err(mismatch("map")),
     }
 }
 
@@ -361,7 +366,7 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap, ctx: &dyn Context) -> Valid
     } else {
         // If the working map isn't empty, that means we had some extra values
         // that didn't match anything.
-        make_oops("dangling map values")
+        Err(mismatch("shorter map"))
     }
 }
 
@@ -410,9 +415,14 @@ fn validate_map_member(
                 }
             }
             // None of the choices worked.
-            make_oops("map choice failure")
+            let expected = format!("choice of {}", c.options.len());
+            Err(mismatch(expected))
         }
-        _ => make_oops("unhandled map member"),
+        // I don't think any of these are possible using CDDL grammar.
+        Node::Literal(_) => Err(ValidateError::Structural("literal map member".into())),
+        Node::PreludeType(_) => Err(ValidateError::Structural("prelude type map member".into())),
+        Node::Map(_) => Err(ValidateError::Structural("map as map member".into())),
+        Node::Array(_) => Err(ValidateError::Structural("array as map member".into())),
     }
 }
 
@@ -432,7 +442,7 @@ fn validate_map_unwrap(
             // All array members validated Ok.
             Ok(())
         }
-        _ => make_oops("unwrap found non-map type"),
+        _ => Err(mismatch("unwrap map")),
     }
 }
 
@@ -457,7 +467,9 @@ fn validate_map_occur(
         }
     }
     if count < lower_limit {
-        return make_oops("failure to find key-value pair");
+        // FIXME: this could get pretty ugly.
+        // FIXME: need a helper to print occurrence symbol.
+        return Err(mismatch(format!("map[{:?}]", occur)));
     }
     Ok(())
 }
@@ -490,6 +502,6 @@ fn validate_standalone_group(g: &Group, value: &Value, ctx: &dyn Context) -> Val
             // Since our group has length 1, validate against that single element.
             validate(value, &g.members[0], ctx)
         }
-        _ => make_oops(format!("can't validate complex standalone group {:?}", g)),
+        _ => Err(ValidateError::Unsupported("standalone group".into())),
     }
 }

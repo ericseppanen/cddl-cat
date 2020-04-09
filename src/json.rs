@@ -17,7 +17,7 @@
 use crate::context::{BasicContext, Context};
 use crate::flatten::flatten_from_str;
 use crate::ivt::Node;
-use crate::util::{make_oops, ValidateError, ValidateResult};
+use crate::util::{ValidateError, ValidateResult};
 use crate::validate::validate;
 use crate::value::Value;
 use serde_json::Value as JSON_Value;
@@ -42,7 +42,9 @@ impl TryFrom<&JSON_Value> for Value {
                 } else if let Some(f) = num.as_f64() {
                     Value::from_float(f)
                 } else {
-                    return make_oops("JSON Value::Number conversion failure");
+                    return Err(ValidateError::ValueError(
+                        "JSON Value::Number conversion failure".into(),
+                    ));
                 }
             }
             JSON_Value::String(t) => Value::Text(t.clone()),
@@ -85,7 +87,6 @@ fn test_json_number_behavior() {
     assert!(json_value.as_u64().is_none());
     assert!(json_value.as_i64().is_none());
     assert!(json_value.as_f64().is_some());
-
 }
 
 // A variant that consumes the JSON Value.
@@ -110,16 +111,14 @@ pub fn validate_json_str(name: &str, cddl: &str, json: &str) -> ValidateResult {
     let ctx = BasicContext::new(flat_cddl);
 
     // Find the rule name that was requested
-    let rule_node: &Node = ctx.rules.get(name).ok_or_else(|| {
-        let msg = format!("rule/group lookup failure: {}", name);
-        ValidateError::Oops(msg)
-    })?;
+    let rule_node: &Node = ctx
+        .rules
+        .get(name)
+        .ok_or_else(|| ValidateError::MissingRule(name.into()))?;
 
     // Deserialize the JSON bytes
-    let json_value: JSON_Value = serde_json::from_str(json).map_err(|e| {
-        let msg = format!("json parsing failed: {}", e);
-        ValidateError::Oops(msg)
-    })?;
+    let json_value: JSON_Value =
+        serde_json::from_str(json).map_err(|e| ValidateError::ValueError(format!("{}", e)))?;
 
     // Convert the JSON tree into a Value tree for validation
     let value = Value::try_from(json_value)?;
