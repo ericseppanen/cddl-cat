@@ -8,6 +8,7 @@
 
 use crate::ast;
 use std::fmt;
+use strum_macros::{Display, IntoStaticStr};
 
 /// One of the types named in the CDDL prelude.
 ///
@@ -16,7 +17,7 @@ use std::fmt;
 /// There are more that aren't supported by this crate yet.
 ///
 /// [RFC8610 appendix D]: https://tools.ietf.org/html/rfc8610#appendix-D
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Display)]
 #[allow(missing_docs)]
 pub enum PreludeType {
     /// Any type or embedded data structure
@@ -49,6 +50,20 @@ pub enum Literal {
     Text(String),
     Bytes(Vec<u8>),
     // TODO: nil?
+}
+
+impl fmt::Display for Literal {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Literal::Bool(b) => write!(f, "{}", b),
+            Literal::Int(i) => write!(f, "{}", i),
+            // FIXME: it's annoying that floating point values can omit the
+            // decimal, which can be confused for an integer.
+            Literal::Float(fl) => write!(f, "{}", fl),
+            Literal::Text(s) => write!(f, "\"{}\"", s),
+            Literal::Bytes(_) => write!(f, "LiteralBytes"),
+        }
+    }
 }
 
 /// A shortcut for `Node::Literal(Literal::Bool(b))`
@@ -121,6 +136,12 @@ impl KeyValue {
     }
 }
 
+impl fmt::Display for KeyValue {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.key, self.value)
+    }
+}
+
 // Implement Debug by hand so we can format it like a map.
 impl fmt::Debug for KeyValue {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -166,6 +187,21 @@ impl Occur {
         }
     }
 
+    /// Get the CDDL symbol for this occurrence.
+    ///
+    /// Returns `?`, `*`, `+`, or `n*m`
+    pub fn symbol(&self) -> String {
+        match self.limit {
+            OccurLimit::Optional => "?".into(),
+            OccurLimit::ZeroOrMore => "*".into(),
+            OccurLimit::OneOrMore => "+".into(),
+            OccurLimit::Numbered(n, m) => match (n, m) {
+                (0, std::usize::MAX) => format!("{}*", n),
+                (_, _) => format!("{}*{}", n, m),
+            },
+        }
+    }
+
     /// Return the lower and upper limits on this occurrence
     ///
     /// Occurrences can always be represented by an inclusive [lower, upper]
@@ -182,6 +218,12 @@ impl Occur {
             OccurLimit::OneOrMore => (1, std::usize::MAX),
             OccurLimit::Numbered(n, m) => (n, m),
         }
+    }
+}
+
+impl fmt::Display for Occur {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} {}", self.symbol(), self.node)
     }
 }
 
@@ -235,7 +277,7 @@ pub struct Array {
 }
 
 /// Any node in the Intermediate Validation Tree.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, IntoStaticStr)]
 #[allow(missing_docs)]
 pub enum Node {
     Literal(Literal),
@@ -248,4 +290,18 @@ pub enum Node {
     KeyValue(KeyValue),
     Occur(Occur),
     Unwrap(Rule),
+}
+
+impl fmt::Display for Node {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Node::Literal(l) => write!(f, "{}", l),
+            Node::PreludeType(p) => write!(f, "{}", p),
+            Node::KeyValue(kv) => write!(f, "{}", kv),
+            _ => {
+                let variant: &str = self.into();
+                write!(f, "{}", variant)
+            }
+        }
+    }
 }

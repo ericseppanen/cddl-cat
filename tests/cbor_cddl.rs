@@ -50,7 +50,7 @@ fn validate_cbor_bool() {
     validate_cbor_bytes("thing", cddl_input, cbor::BOOL_TRUE).unwrap();
     validate_cbor_bytes("thing", cddl_input, cbor::BOOL_FALSE).unwrap_err();
     let err = validate_cbor_bytes("thing", cddl_input, cbor::NULL).unwrap_err();
-    assert_eq!(err.to_string(), "Mismatch(expected Bool(true))");
+    assert_eq!(err.to_string(), "Mismatch(expected true)");
 }
 
 #[test]
@@ -58,7 +58,8 @@ fn validate_cbor_float() {
     let cddl_input = r#"thing = 0.0"#;
     validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_0_0).unwrap();
     let err = validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_1_0).unwrap_err();
-    assert_eq!(err.to_string(), "Mismatch(expected Float(0.0))");
+    // FIXME: It's annoying that the rust float syntax can omit the decimal point.
+    assert_eq!(err.to_string(), "Mismatch(expected 0)");
 
     let cddl_input = r#"thing = float"#;
     validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_1_0).unwrap();
@@ -157,10 +158,7 @@ fn validate_cbor_array() {
     let cddl_input = r#"thing = [1, 2, 3]"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
     let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "Mismatch(expected array element Literal(Int(1)))"
-    );
+    assert_eq!(err.to_string(), "Mismatch(expected array element 1)");
 }
 
 // These data structures exist so that we can serialize some more complex
@@ -208,10 +206,9 @@ fn validate_cbor_homogenous_array() {
     let cddl_input = r#"thing = [+ int]"#; // one or more
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
     let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap_err();
-    // FIXME: this error is needlessly verbose.
     assert_eq!(
         err.to_string(),
-        "Mismatch(expected more array element Occur { limit: OneOrMore, node: PreludeType(Int) })"
+        "Mismatch(expected more array element [+ Int])"
     );
 
     let cddl_input = r#"thing = [? int]"#; // zero or one
@@ -302,10 +299,7 @@ fn validate_cbor_array_unwrap() {
     // Fail if we don't find enough matching items while unwrapping.
     let cddl_input = r#"footer = [a: int, b: int] thing = [c: int, d: int, ~footer]"#;
     let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
-    assert_eq!(
-        err.to_string(),
-        "Mismatch(expected array element PreludeType(Int))"
-    );
+    assert_eq!(err.to_string(), "Mismatch(expected array element Int)");
 
     // Fail if the unwrapped name doesn't resolve.
     let cddl_input = r#"thing = [c: int ~footer]"#;
@@ -405,7 +399,7 @@ fn validate_cbor_map_group() {
 
     let cddl_input = r#"thing = {name: tstr, agroup} agroup = (wrong: int)"#;
     let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
-    assert_eq!(err.to_string(), r#"Mismatch(expected map[Text("wrong")])"#);
+    assert_eq!(err.to_string(), r#"Mismatch(expected map{"wrong"})"#);
 
     let cddl_input = r#"thing = {name: tstr, agroup} agroup = (age: bool)"#;
     let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
@@ -433,10 +427,9 @@ fn validate_cbor_map() {
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
     let cddl_input = r#"thing = {name: tstr, age: int, + minor: bool}"#;
     let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
-    // FIXME: terrible error formatting.
     assert_eq!(
         err.to_string(),
-        r#"Mismatch(expected map[Occur { limit: OneOrMore, node: KeyValue(KeyValue(Literal(Text("minor")), PreludeType(Bool))) }])"#
+        r#"Mismatch(expected map{+ "minor": Bool}])"#
     );
 
     let cddl_input = r#"thing = {name: tstr, age: tstr}"#;
@@ -477,7 +470,7 @@ fn validate_cbor_map() {
 
     let cddl_input = r#"thing = {name: tstr, age: int, minor: bool}"#;
     let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
-    assert_eq!(err.to_string(), r#"Mismatch(expected map[Text("minor")])"#);
+    assert_eq!(err.to_string(), r#"Mismatch(expected map{"minor"})"#);
 
     let cddl_input = r#"thing = {x: int, y: int, z: int}"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();

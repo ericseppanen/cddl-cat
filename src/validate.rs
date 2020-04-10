@@ -114,7 +114,7 @@ fn validate_literal(literal: &Literal, value: &Value) -> ValidateResult {
     if *value == Value::from(literal) {
         return Ok(());
     }
-    Err(mismatch(format!("{:?}", literal)))
+    Err(mismatch(format!("{}", literal)))
 }
 
 fn map_search_literal(literal: &Literal, working_map: &mut WorkingMap) -> TempResult<Value> {
@@ -129,7 +129,7 @@ fn map_search_literal(literal: &Literal, working_map: &mut WorkingMap) -> TempRe
         }
         None => {
             // We didn't find the key; return an error
-            Err(mismatch(format!("map[{:?}]", literal)))
+            Err(mismatch(format!("map{{{}}}", literal)))
         }
     }
 }
@@ -155,7 +155,7 @@ fn map_search(node: &Node, working_map: &mut WorkingMap, ctx: &dyn Context) -> T
     }
     // We searched all the keys without finding a match.  Validation fails.
     // FIXME: node could expand to a giant string.  Need some kind of helper fn?
-    Err(mismatch(format!("map[{:?}]", node)))
+    Err(mismatch(format!("map{{{}}}", node)))
 }
 
 // Note `ty` is passed by value because clippy says it's only 1 byte.
@@ -309,9 +309,7 @@ fn validate_array_occur(
         }
     }
     if count < lower_limit {
-        // FIXME: this could get pretty ugly.
-        // FIXME: need a helper to print occurrence symbol.
-        return Err(mismatch(format!("more array element {:?}", occur)));
+        return Err(mismatch(format!("more array element [{}]", occur)));
     }
     Ok(())
 }
@@ -329,7 +327,7 @@ fn validate_array_value(
             working_array.array.pop_front();
             Ok(())
         }
-        None => Err(mismatch(format!("array element {:?}", node))),
+        None => Err(mismatch(format!("array element {}", node))),
     }
 }
 
@@ -467,9 +465,10 @@ fn validate_map_occur(
         }
     }
     if count < lower_limit {
-        // FIXME: this could get pretty ugly.
-        // FIXME: need a helper to print occurrence symbol.
-        return Err(mismatch(format!("map[{:?}]", occur)));
+        // Read this format string as "{{" then "{}" then "}}"
+        // The first and last print a single brace; the value is in the
+        // middle, e.g "{foo}".
+        return Err(mismatch(format!("map{{{}}}]", occur)));
     }
     Ok(())
 }
