@@ -22,7 +22,7 @@ pub type FlattenResult<T> = std::result::Result<T, ValidateError>;
 
 /// Convert a CDDL schema in UTF-8 form into a (name, rule) map.
 pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
-    let cddl = parse_cddl(cddl_input).map_err(|pe| ValidateError::ParseError(pe))?;
+    let cddl = parse_cddl(cddl_input).map_err(ValidateError::ParseError)?;
     flatten(&cddl)
 }
 
@@ -294,7 +294,7 @@ where
     // fit into an i128.
     n.try_into().map_err(|_| {
         let msg = format!("integer conversion failed: {}", n);
-        ValidateError::Structural(msg.into())
+        ValidateError::Structural(msg)
     })
 }
 

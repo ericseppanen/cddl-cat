@@ -52,7 +52,7 @@ impl Context for BasicContext {
 #[doc(hidden)] // Only pub for integration tests
 #[allow(missing_docs)]
 pub mod tests {
-    use super::{ValidateError, Context, LookupResult};
+    use super::{Context, LookupResult, ValidateError};
 
     /// A [Context] that fails all rule lookups
     pub struct DummyContext {}
