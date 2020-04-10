@@ -1,4 +1,4 @@
-name: Build and Test
+name: Build Features
 
 on:
   push:
@@ -10,7 +10,8 @@ jobs:
   cargo-build:
     strategy:
       matrix:
-        rust_toolchain: [stable, nightly, 1.37.0]
+        features: ["serde_cbor", "serde_json"]
+        rust_toolchain: [stable]
         os: [ubuntu-latest]
 
     name: Build
@@ -30,9 +31,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --all --bins --examples --tests
-
-      - name: Test with default features
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
+          args: --no-default-features --features ${{ matrix.features }}
