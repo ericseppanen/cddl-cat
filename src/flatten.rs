@@ -59,8 +59,17 @@ fn flatten_type(ty: &ast::Type) -> FlattenResult<Node> {
 }
 
 fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
-    // FIXME: handle range & control operators.
-    flatten_type2(ty1)
+    use ast::Type1::*;
+    match ty1 {
+        Simple(ty2) => flatten_type2(ty2),
+        Range(_) => Err(ValidateError::Unsupported(
+            "range operator".into(),
+        )),
+        Control(_) => Err(ValidateError::Unsupported(
+            "range operator".into(),
+        )),
+
+    }
 }
 
 fn flatten_value(value: &ast::Value) -> FlattenResult<Node> {

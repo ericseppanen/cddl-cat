@@ -150,16 +150,46 @@ pub enum Type2 {
     Unwrap(String),
 }
 
-/// A CDDL type, with additional range/control operators.
-///
-/// Note: `rangeop` and `ctlop` are not yet supported, so this is
-/// currently just an alias for [`Type1`]
+/// A CDDL type, with an additional range or control operator.
 ///
 /// CDDL ABNF grammar:
 /// ```text
 /// type1 = type2 [S (rangeop / ctlop) S type2]
 /// ```
-pub type Type1 = Type2;
+#[derive(Debug, PartialEq)]
+pub enum Type1 {
+    /// A `Type1` containing only a `Type2` with no operators
+    Simple(Type2),
+    /// A range (e.g. `1..10`)
+    Range(TypeRange),
+    /// A type with a control operator attached (e.g. `bstr .size 32`)
+    Control(TypeControl),
+}
+
+/// A CDDL type, specified with a range operator.
+///
+/// Range operators are `..` (inclusive range) and `...` (exclusive range).
+/// CDDL only allows the range operators on pairs of integers or floats.
+#[derive(Debug, PartialEq)]
+#[allow(missing_docs)]
+pub struct TypeRange {
+    pub start: Type2,
+    pub end: Type2,
+    pub inclusive: bool,
+}
+
+/// A CDDL type, specified with a control operator.
+///
+/// Control operators can express a range of possibilities, including
+/// `.size N` (limit size of a value in bytes) or `.regexp` (requiring a text
+/// string to match the given regular expression).
+#[derive(Debug, PartialEq)]
+#[allow(missing_docs)]
+pub struct TypeControl {
+    pub first: Type2,
+    pub second: Type2,
+    pub op: String,
+}
 
 /// A CDDL type, with choices.
 ///

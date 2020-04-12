@@ -616,14 +616,14 @@ fn test_member() {
     let result = format!("{:?}", result);
     assert_eq!(
         result,
-        r#"Ok(("", Member { key: Some(MemberKey { val: Bareword("a"), cut: true }), value: Type([Typename("b")]) }))"#
+        r#"Ok(("", Member { key: Some(MemberKey { val: Bareword("a"), cut: true }), value: Type([Simple(Typename("b"))]) }))"#
     );
 
     let result = grpent_member("foo");
     let result = format!("{:?}", result);
     assert_eq!(
         result,
-        r#"Ok(("", Member { key: None, value: Type([Typename("foo")]) }))"#
+        r#"Ok(("", Member { key: None, value: Type([Simple(Typename("foo"))]) }))"#
     );
 }
 
@@ -663,14 +663,14 @@ fn test_grpent_val() {
     let result = format!("{:?}", result);
     assert_eq!(
         result,
-        r#"Ok(("", Member(Member { key: None, value: Type([Typename("foo")]) })))"#
+        r#"Ok(("", Member(Member { key: None, value: Type([Simple(Typename("foo"))]) })))"#
     );
 
     let result = grpent_val("17");
     let result = format!("{:?}", result);
     assert_eq!(
         result,
-        r#"Ok(("", Member(Member { key: None, value: Type([Value(Uint(17))]) })))"#
+        r#"Ok(("", Member(Member { key: None, value: Type([Simple(Value(Uint(17)))]) })))"#
     );
 }
 
@@ -746,14 +746,14 @@ fn test_grpent() {
     let result = format!("{:?}", result);
     assert_eq!(
         result,
-        r#"Ok(("", GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Typename("foo")]) }) }))"#
+        r#"Ok(("", GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("foo"))]) }) }))"#
     );
 
     let result = grpent("foo: bar");
     let result = format!("{:?}", result);
     assert_eq!(
         result,
-        r#"Ok(("", GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Bareword("foo"), cut: true }), value: Type([Typename("bar")]) }) }))"#
+        r#"Ok(("", GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Bareword("foo"), cut: true }), value: Type([Simple(Typename("bar"))]) }) }))"#
     );
 }
 
@@ -891,9 +891,85 @@ fn type2(input: &str) -> JResult<&str, Type2> {
     (input)
 }
 
-// FIXME: this just calls type2 until we want to support rangeop / ctlop
+// Returns the string containing the control identifier
+#[rustfmt::skip]
+fn control_op(input: &str) -> JResult<&str, &str> {
+    preceded(
+        tag("."),
+        ident
+    )
+    (input)
+}
+
+// Returns the range or control operator string
+// (either ".." or "..." or the control identifier)
+#[rustfmt::skip]
+fn range_or_control_op(input: &str) -> JResult<&str, (&str, Type2)> {
+    pair(
+        alt((
+            tag(".."),
+            tag("..."),
+            control_op
+        )),
+        preceded(
+            ws,
+            type2
+        )
+    )
+    (input)
+}
+
+// type1 = type2 [S (rangeop / ctlop) S type2]
+#[rustfmt::skip]
 fn type1(input: &str) -> JResult<&str, Type1> {
-    type2(input)
+    let f = pair(
+        type2,
+        opt(
+            preceded(
+                ws,
+                range_or_control_op
+            )
+        )
+    );
+    map(f, |ty1| match ty1 {
+        (ty2, None) => Type1::Simple(ty2),
+        (start, Some(("..", end))) => Type1::Range(TypeRange {
+            start,
+            inclusive: true,
+            end,
+        }),
+        (start, Some(("...", end))) => Type1::Range(TypeRange {
+            start,
+            inclusive: false,
+            end,
+        }),
+        (first, Some((op, second))) => Type1::Control(TypeControl {
+            first,
+            op: op.into(),
+            second,
+        }),
+    })
+    (input)
+}
+
+#[test]
+fn test_type1() {
+    let result = type1("1 .. 9");
+    let result = format!("{:?}", result);
+    assert_eq!(
+        result,
+        r#"Ok(("", Range(TypeRange { start: Value(Uint(1)), end: Value(Uint(9)), inclusive: true })))"#
+    );
+
+    let result = type1("uint .size 3");
+    let result = format!("{:?}", result);
+    assert_eq!(
+        result,
+        r#"Ok(("", Control(TypeControl { first: Typename("uint"), second: Value(Uint(3)), op: "size" })))"#
+    );
+
+    // FIXME: RFC 2.2.2.1 points out that "min..max" is not a range, but an identifier
+    // (because '.' is a valid ident character).  There should be a unit test for this.
 }
 
 // type = type1 [ / type1 ... ]  (skipping over type1 for now)
@@ -987,14 +1063,14 @@ fn test_grpchoice() {
     let result = format!("{:?}", result);
     assert_eq!(
         result,
-        r#"Ok(("", GrpChoice([GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Typename("abc")]) }) }])))"#
+        r#"Ok(("", GrpChoice([GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("abc"))]) }) }])))"#
     );
 
     let result = grpchoice("abc, def");
     let result = format!("{:?}", result);
     assert_eq!(
         result,
-        r#"Ok(("", GrpChoice([GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Typename("abc")]) }) }, GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Typename("def")]) }) }])))"#
+        r#"Ok(("", GrpChoice([GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("abc"))]) }) }, GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("def"))]) }) }])))"#
     );
 }
 
@@ -1004,7 +1080,7 @@ fn test_rule() {
     let result = format!("{:?}", result);
     assert_eq!(
         result,
-        r#"Rule { name: "foo", val: AssignType(Type([Typename("bar")])) }"#
+        r#"Rule { name: "foo", val: AssignType(Type([Simple(Typename("bar"))])) }"#
     );
 }
 
@@ -1014,7 +1090,7 @@ fn test_cddl() {
     let result = format!("{:?}", result);
     assert_eq!(
         result,
-        r#"Ok(Cddl { rules: [Rule { name: "foo", val: AssignType(Type([Map(Group([GrpChoice([GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Value(Text("a")), cut: true }), value: Type([Typename("bar")]) }) }, GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Type1(Typename("b")), cut: false }), value: Type([Typename("baz")]) }) }])]))])) }] })"#
+        r#"Ok(Cddl { rules: [Rule { name: "foo", val: AssignType(Type([Simple(Map(Group([GrpChoice([GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Value(Text("a")), cut: true }), value: Type([Simple(Typename("bar"))]) }) }, GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Type1(Simple(Typename("b"))), cut: false }), value: Type([Simple(Typename("baz"))]) }) }])])))])) }] })"#
     );
 }
 
