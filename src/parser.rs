@@ -193,7 +193,7 @@ fn ealpha(input: &str) -> JResult<&str, &str> {
 fn ident_tail(input: &str) -> JResult<&str, &str> {
     recognize(
         preceded(
-            opt(one_of("-.")),
+            opt(many1(one_of("-."))),
             alt((
                 ealpha,
                 digit1
@@ -221,6 +221,7 @@ fn test_ident() {
     assert_eq!(ident("a.1"), Ok(("", "a.1")));
     assert_eq!(ident("a1."), Ok((".", "a1")));
     assert_eq!(ident("@a1"), Ok(("", "@a1")));
+    assert_eq!(ident("a..b"), Ok(("", "a..b")));
     assert!(ident("1a").is_err());
 }
 
@@ -975,8 +976,11 @@ fn test_type1() {
         r#"Ok(("", Control(TypeControl { first: Typename("uint"), second: Value(Uint(3)), op: "size" })))"#
     );
 
-    // FIXME: RFC 2.2.2.1 points out that "min..max" is not a range, but an identifier
-    // (because '.' is a valid ident character).  There should be a unit test for this.
+    // RFC8610 2.2.2.1 points out that "min..max" is not a range, but an identifier
+    // (because '.' is a valid ident character).
+    let result = type2("min..max");
+    let result = format!("{:?}", result);
+    assert_eq!(result, r#"Ok(("", Typename("min..max")))"#);
 }
 
 // type = type1 [ / type1 ... ]  (skipping over type1 for now)
