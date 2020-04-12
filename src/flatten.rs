@@ -62,14 +62,42 @@ fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
     use ast::Type1::*;
     match ty1 {
         Simple(ty2) => flatten_type2(ty2),
-        Range(_) => Err(ValidateError::Unsupported(
-            "range operator".into(),
-        )),
-        Control(_) => Err(ValidateError::Unsupported(
-            "range operator".into(),
-        )),
-
+        Range(r) => flatten_range(r),
+        Control(_) => Err(ValidateError::Unsupported("range operator".into())),
     }
+}
+
+// The only way a range start or end can be specified is with a literal
+// value, or with a typename.  We will accept either of those, and throw
+// an error otherwise.  Let the validator worry about whether a typename
+// resolves to a literal.
+fn range_point(point: &ast::Type2) -> FlattenResult<Node> {
+    let node = match point {
+        ast::Type2::Value(v) => flatten_value(v),
+        ast::Type2::Typename(t) => flatten_typename(t),
+        _ => Err(ValidateError::Structural(
+            "bad type on range operator".into(),
+        )),
+    }?;
+    // Check that the node that came back is a Rule or Literal.
+    // Anything else (i.e. PreludeType) should cause an error.
+    match node {
+        Node::Rule(_) | Node::Literal(_) => Ok(node),
+        _ => Err(ValidateError::Structural(
+            "bad type on range operator".into(),
+        )),
+    }
+}
+
+fn flatten_range(range: &ast::TypeRange) -> FlattenResult<Node> {
+    let start = range_point(&range.start)?;
+    let end = range_point(&range.end)?;
+
+    Ok(Node::Range(Range {
+        start: start.into(),
+        end: end.into(),
+        inclusive: range.inclusive,
+    }))
 }
 
 fn flatten_value(value: &ast::Value) -> FlattenResult<Node> {

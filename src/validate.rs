@@ -8,6 +8,7 @@ use crate::util::{mismatch, ValidateError, ValidateResult};
 use crate::value::Value;
 use std::collections::BTreeMap; // used in Value::Map
 use std::collections::VecDeque;
+use std::mem::discriminant;
 
 type ValueMap = BTreeMap<Value, Value>;
 
@@ -59,6 +60,7 @@ pub(crate) fn validate(value: &Value, node: &Node, ctx: &dyn Context) -> Validat
         Node::KeyValue(_) => Err(ValidateError::Structural("unexpected KeyValue".into())),
         Node::Occur(_) => Err(ValidateError::Structural("unexpected Occur".into())),
         Node::Unwrap(_) => Err(ValidateError::Structural("unexpected Unwrap".into())),
+        Node::Range(r) => validate_range(r, value, ctx),
     }
 }
 
@@ -421,6 +423,7 @@ fn validate_map_member(
         Node::PreludeType(_) => Err(ValidateError::Structural("prelude type map member".into())),
         Node::Map(_) => Err(ValidateError::Structural("map as map member".into())),
         Node::Array(_) => Err(ValidateError::Structural("array as map member".into())),
+        Node::Range(_) => Err(ValidateError::Structural("range as map member".into())),
     }
 }
 
@@ -502,5 +505,62 @@ fn validate_standalone_group(g: &Group, value: &Value, ctx: &dyn Context) -> Val
             validate(value, &g.members[0], ctx)
         }
         _ => Err(ValidateError::Unsupported("standalone group".into())),
+    }
+}
+
+fn deref_range_rule(node: &Node, ctx: &dyn Context) -> TempResult<Literal> {
+    match node {
+        Node::Literal(l) => Ok(l.clone()),
+        Node::Rule(r) => deref_range_rule(ctx.lookup_rule(&r.name)?, ctx),
+        _ => Err(ValidateError::Structural(
+            "confusing type on range operator".into(),
+        )),
+    }
+}
+
+// Returns true if value is within range
+fn check_range<T: PartialOrd>(start: T, end: T, value: T, inclusive: bool) -> bool {
+    if value < start {
+        return false;
+    }
+    if inclusive {
+        value <= end
+    } else {
+        value < end
+    }
+}
+
+fn validate_range(range: &Range, value: &Value, ctx: &dyn Context) -> ValidateResult {
+    // first dereference rules on start and end, if necessary.
+    let start = deref_range_rule(&range.start, ctx)?;
+    let end = deref_range_rule(&range.end, ctx)?;
+
+    match (&start, &end, &value) {
+        (Literal::Int(i1), Literal::Int(i2), Value::Integer(v)) => {
+            if check_range(i1, i2, v, range.inclusive) {
+                Ok(())
+            } else {
+                Err(mismatch(format!("{}", range)))
+            }
+        }
+        (Literal::Float(f1), Literal::Float(f2), Value::Float(v)) => {
+            if check_range(f1, f2, &v.0, range.inclusive) {
+                Ok(())
+            } else {
+                Err(mismatch(format!("{}", range)))
+            }
+        }
+        _ => {
+            if discriminant(&start) == discriminant(&end) {
+                // The range types were the same, so this is just a mismatch.
+                Err(mismatch(format!("{}", range)))
+            } else {
+                // The range types didn't agree; return an error that points the
+                // finger at the CDDL instead.
+                Err(ValidateError::Structural(
+                    "mismatched types on range operator".into(),
+                ))
+            }
+        }
     }
 }

@@ -102,6 +102,7 @@ fn validate_cbor_choice() {
 #[test]
 fn validate_cbor_integer() {
     let cddl_input = r#"thing = 1"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1).unwrap();
     validate_cbor_bytes("thing", cddl_input, cbor::NULL).unwrap_err();
     validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_1_0).unwrap_err();
     validate_cbor_bytes("thing", cddl_input, cbor::BOOL_TRUE).unwrap_err();
@@ -118,6 +119,49 @@ fn validate_cbor_integer() {
     validate_cbor_bytes("thing", cddl_input, cbor::NINT_1000).unwrap();
     validate_cbor_bytes("thing", cddl_input, cbor::INT_0).unwrap_err();
     validate_cbor_bytes("thing", cddl_input, cbor::INT_24).unwrap_err();
+}
+
+#[test]
+fn validate_cbor_ranges() {
+    let cddl_input = r#"thing = 1..5"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1).unwrap();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::INT_24).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected 1..5)");
+
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_1_0).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected 1..5)");
+
+    let cddl_input = r#"thing = 1..24"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_24).unwrap();
+
+    let cddl_input = r#"thing = 1...24"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_23).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_24).unwrap_err();
+
+    let cddl_input = r#"thing = 1 .. 5.3"#;
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::INT_1).unwrap_err();
+    assert_eq!(
+        err.to_string(),
+        "Structural(mismatched types on range operator)"
+    );
+
+    let cddl_input = r#"max=5 thing = 1..max"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_24).unwrap_err();
+
+    let cddl_input = r#"thing = 0.9..1.2"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_1_0).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_0_0).unwrap_err();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::INT_1).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected 0.9..1.2)");
+
+    let cddl_input = r#"thing = 1..uint"#;
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::INT_1).unwrap_err();
+    assert_eq!(err.to_string(), "Structural(bad type on range operator)");
+
+    let cddl_input = r#"thing = 1..[5]"#;
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::INT_1).unwrap_err();
+    assert_eq!(err.to_string(), "Structural(bad type on range operator)");
 }
 
 #[test]

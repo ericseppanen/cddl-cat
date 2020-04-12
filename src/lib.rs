@@ -95,7 +95,6 @@
 //! - Extend group with `//=`
 //! - Type sockets with `$`
 //! - Group sockets with `$$`
-//! - Range operators `..`, `...`
 //! - Control operators, e.g. `.size`, `.bits`, ...
 //! - Group enumeration with `&`
 //! - Tagged data with `#`

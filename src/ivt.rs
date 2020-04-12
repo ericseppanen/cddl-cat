@@ -276,6 +276,21 @@ pub struct Array {
     pub members: Vec<Node>,
 }
 
+#[derive(Debug, Clone)]
+#[allow(missing_docs)]
+pub struct Range {
+    pub start: Box<Node>,
+    pub end: Box<Node>,
+    pub inclusive: bool,
+}
+
+impl fmt::Display for Range {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let op = if self.inclusive { ".." } else { "..." };
+        write!(f, "{}{}{}", self.start, op, self.end)
+    }
+}
+
 /// Any node in the Intermediate Validation Tree.
 #[derive(Debug, Clone, IntoStaticStr)]
 #[allow(missing_docs)]
@@ -290,6 +305,7 @@ pub enum Node {
     KeyValue(KeyValue),
     Occur(Occur),
     Unwrap(Rule),
+    Range(Range),
 }
 
 impl fmt::Display for Node {

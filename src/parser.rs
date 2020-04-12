@@ -907,8 +907,8 @@ fn control_op(input: &str) -> JResult<&str, &str> {
 fn range_or_control_op(input: &str) -> JResult<&str, (&str, Type2)> {
     pair(
         alt((
-            tag(".."),
             tag("..."),
+            tag(".."),
             control_op
         )),
         preceded(
@@ -959,6 +959,13 @@ fn test_type1() {
     assert_eq!(
         result,
         r#"Ok(("", Range(TypeRange { start: Value(Uint(1)), end: Value(Uint(9)), inclusive: true })))"#
+    );
+
+    let result = type1("1 ... 9");
+    let result = format!("{:?}", result);
+    assert_eq!(
+        result,
+        r#"Ok(("", Range(TypeRange { start: Value(Uint(1)), end: Value(Uint(9)), inclusive: false })))"#
     );
 
     let result = type1("uint .size 3");
