@@ -575,15 +575,14 @@ struct Pickup {
 
 #[test]
 fn validate_choice_example() {
-    // This is an example from rfc8610 2.2.2
-    // modifications from the RFC example:
-    // 1. The bareword "number" has been changed to "number"; otherwise the parser gets confused.
-    // 2. Substitute "_" for "-" in barewords.
+    // This is an example from RFC8610 2.2.2
+    // The only modification from the RFC example is to substitute "_" for "-" in barewords,
+    // for compatibility with serde_cbor.
     let cddl_input = r#"
         address = { delivery }
 
         delivery = (
-        street: tstr, ? "number": uint, city //
+        street: tstr, ? number: uint, city //
         po_box: uint, city //
         per_pickup: true )
 
