@@ -169,24 +169,21 @@ fn validate_json_array_groups() {
     let cddl_input = r#"thing = [(int, int, int)]"#;
     validate_json_str("thing", cddl_input, "[1, 2, 3]").unwrap();
 
-    // FIXME broken
-    if false {
-        // Consume values in groups of one, an arbitrary number of times.
-        let cddl_input = r#"thing = [* (int)]"#;
-        validate_json_str("thing", cddl_input, "[]").unwrap();
-        validate_json_str("thing", cddl_input, "[1, 2, 3]").unwrap();
+    // Consume values in groups of one, an arbitrary number of times.
+    let cddl_input = r#"thing = [* (int)]"#;
+    validate_json_str("thing", cddl_input, "[]").unwrap();
+    validate_json_str("thing", cddl_input, "[1, 2, 3]").unwrap();
 
-        // Consume values in groups of three, an arbitrary number of times.
-        let cddl_input = r#"thing = [* (int, int, int)]"#;
-        validate_json_str("thing", cddl_input, "[]").unwrap();
-        validate_json_str("thing", cddl_input, "[1, 2, 3]").unwrap();
+    // Consume values in groups of three, an arbitrary number of times.
+    let cddl_input = r#"thing = [* (int, int, int)]"#;
+    validate_json_str("thing", cddl_input, "[]").unwrap();
+    validate_json_str("thing", cddl_input, "[1, 2, 3]").unwrap();
 
-        // Consume values in groups of two, an arbitrary number of times.
-        let cddl_input = r#"thing = [* (int, int)]"#;
-        validate_json_str("thing", cddl_input, "[]").unwrap();
-        // Shouldn't match because three doesn't go into two evenly.
-        validate_json_str("thing", cddl_input, "[1, 2, 3]").unwrap_err();
-    }
+    // Consume values in groups of two, an arbitrary number of times.
+    let cddl_input = r#"thing = [* (int, int)]"#;
+    validate_json_str("thing", cddl_input, "[]").unwrap();
+    // Shouldn't match because three doesn't go into two evenly.
+    validate_json_str("thing", cddl_input, "[1, 2, 3]").unwrap_err();
 
     let cddl_input = r#"thing = [a: int, b: int, bar] bar = (c: int)"#;
     validate_json_str("thing", cddl_input, "[1, 2, 3]").unwrap();

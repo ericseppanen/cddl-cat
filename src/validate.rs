@@ -31,15 +31,81 @@ impl WorkingMap {
 
 /// This struct allows us to maintain a copy of an array that is consumed
 /// during validation.
+#[derive(Debug)]
 struct WorkingArray {
+    // The elements in the Value Array
     array: VecDeque<Value>,
+    // A stack of lists; each list contains maybe-discarded elements.
+    snaps: VecDeque<VecDeque<Value>>,
 }
 
 impl WorkingArray {
     /// Makes a copy of an existing map's table.
     fn new(array: &[Value]) -> WorkingArray {
         let deque: VecDeque<Value> = array.iter().cloned().collect();
-        WorkingArray { array: deque }
+        WorkingArray {
+            array: deque,
+            snaps: VecDeque::new(),
+        }
+    }
+
+    // When we start speculatively matching array elements (e.g. in a Choice
+    // or Occur), we may fail the match partway through, and need to rewind
+    // to the most recent snapshot.
+    //
+    // It's possible for nested snapshots to exist; for example if we have a
+    // group-of-choices nested inside a group-of-choices.
+    //
+    // If one array is nested inside another, the inner array will get its
+    // own WorkingArray so snapshots aren't necessary in that case.
+    fn snapshot(&mut self) {
+        let new_snap: VecDeque<Value> = VecDeque::new();
+        self.snaps.push_back(new_snap);
+    }
+
+    // Restore the array to the point when we last called snapshot()
+    fn rewind(&mut self) {
+        // If validate code is implemented correctly, then unwrap() should
+        // never panic.
+        let mut top_snap = self.snaps.pop_back().unwrap();
+        // drain the elements in LIFO order, and push them back into
+        // the working array.
+        for element in top_snap.drain(..).rev() {
+            self.array.push_front(element);
+        }
+    }
+
+    // We completed a match, so we can retire the most recent snapshot.
+    fn commit(&mut self) {
+        // If validate code is implemented correctly, then unwrap() should
+        // never panic.
+        // This throws away the value that was popped; those values were
+        // successfully matched and are no longer needed.
+        self.snaps.pop_back().unwrap();
+    }
+
+    // Peek at the front of the working array.
+    fn peek_front(&self) -> Option<&Value>{
+        self.array.front()
+    }
+
+    // Remove an element from the working array.
+    // If there is an active snapshot, stash the element there until we're
+    // certain we've matched the entire group.
+    fn pop_front(&mut self) {
+        // If validate code is implemented correctly, then unwrap() should
+        // never panic (we've already peeked at this value in order to match
+        // it.)
+        let element = self.array.pop_front().unwrap();
+        match self.snaps.back_mut() {
+            Some(snap) => {
+                snap.push_back(element);
+            }
+            None => {
+                // Nothing to do if there's no snapshot;
+                // just discard the element.
+            }
+        }
     }
 }
 
@@ -257,12 +323,30 @@ fn validate_array_member(
             validate_array_unwrap(node, working_array, ctx)
         }
         Node::Group(g) => {
+            // As we call validate_array_member, we don't know how many items
+            // it might speculatively pop from the list.  So we'll take a snapshot
+            // now and commit our changes if we match successfully (and roll them
+            // back if it fails).
+            working_array.snapshot();
+
             // Recurse into each member of the group.
             for group_member in &g.members {
-                // Exit early if we hit an error.
-                validate_array_member(group_member, working_array, ctx)?;
+                match validate_array_member(group_member, working_array, ctx) {
+                    Ok(_) => {
+                        // So far so good...
+                    }
+                    Err(e) => {
+                        // Since we failed to validate the entire group, rewind to our most
+                        // recent snapshot.  This may put values back into the array,
+                        // so they can be matched by whatever we try next (or trigger
+                        // an error if they aren't consumed by anything).
+                        working_array.rewind();
+                        return Err(e);
+                    }
+                }
             }
             // All group members validated Ok.
+            working_array.commit();
             Ok(())
         }
         m => validate_array_value(m, working_array, ctx),
@@ -300,7 +384,7 @@ fn validate_array_occur(
     let mut count: usize = 0;
 
     loop {
-        match validate_array_value(&occur.node, working_array, ctx) {
+        match validate_array_member(&occur.node, working_array, ctx) {
             Ok(_) => (),
             Err(_) => break,
         }
@@ -322,11 +406,11 @@ fn validate_array_value(
     working_array: &mut WorkingArray,
     ctx: &dyn Context,
 ) -> ValidateResult {
-    match working_array.array.front() {
+    match working_array.peek_front() {
         Some(val) => {
             validate(val, node, ctx)?;
             // We had a successful match; remove the matched value.
-            working_array.array.pop_front();
+            working_array.pop_front();
             Ok(())
         }
         None => Err(mismatch(format!("array element {}", node))),
