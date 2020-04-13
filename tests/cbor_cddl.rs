@@ -469,6 +469,18 @@ fn validate_cbor_map_group() {
     let cddl_input = r#"thing = {name: tstr, agroup} agroup = (age: bool)"#;
     let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
     assert_eq!(err.to_string(), "Mismatch(expected bool)");
+
+    // This is constructed to require backtracking by the validator:
+    // `foo` will consume `age` before failing; we need to rewind to
+    // a previous state so that `bar` will match.
+    let cddl_input = r#"thing = { foo // bar } foo = (name: tstr, age: bool) bar = (name: tstr, age: int)"#;
+    validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
+
+    // Test nested groups with lots of backtracking.
+    let cddl_input = r#"thing = { (name: tstr, photo: bstr //
+                                  (name: tstr, fail: bool // name: tstr, age: int)) }"#;
+    validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
+
 }
 
 #[test]

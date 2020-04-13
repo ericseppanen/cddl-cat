@@ -18,6 +18,9 @@ type TempResult<T> = Result<T, ValidateError>;
 /// This struct allows us to maintain a map that is consumed during validation.
 struct WorkingMap {
     map: ValueMap,
+    // A stack of lists; each list contains maybe-discarded elements,
+    // in (key, value) form.
+    snaps: VecDeque<VecDeque<(Value, Value)>>,
 }
 
 impl WorkingMap {
@@ -25,6 +28,63 @@ impl WorkingMap {
     fn new(value_map: &ValueMap) -> WorkingMap {
         WorkingMap {
             map: value_map.clone(),
+            snaps: VecDeque::new(),
+        }
+    }
+
+    // When we start speculatively matching map elements (e.g. in a Choice
+    // or Occur containing groups), we may fail the match partway through, and
+    // need to rewind to the most recent snapshot.
+    //
+    // It's possible for nested snapshots to exist; for example if we have a
+    // group-of-choices nested inside a group-of-choices.
+    //
+    // If one array is nested inside another, the inner array will get its
+    // own WorkingArray so snapshots aren't necessary in that case.
+    fn snapshot(&mut self) {
+        self.snaps.push_back(VecDeque::new());
+    }
+
+    // Restore the map to the point when we last called snapshot()
+    fn rewind(&mut self) {
+        // If validate code is implemented correctly, then unwrap() should
+        // never panic.
+        let mut top_snap = self.snaps.pop_back().unwrap();
+        // Drain the elements (order not important), and insert them back into
+        // the working map.
+        self.map.extend(top_snap.drain(..));
+    }
+
+    // We completed a match, so we can retire the most recent snapshot.
+    fn commit(&mut self) {
+        // If validate code is implemented correctly, then unwrap() should
+        // never panic.
+        // This throws away the list that was popped; those values were
+        // successfully matched and are no longer needed.
+        self.snaps.pop_back().unwrap();
+    }
+
+    // Peek at the value correspending to a given key (if any)
+    fn peek_at(&self, key: &Value) -> Option<&Value> {
+        self.map.get(key)
+    }
+
+    // Remove a value from the working map.
+    // If there is an active snapshot, stash the key/value pair there until
+    // we're certain we've matched the entire group.
+    fn remove(&mut self, key: &Value) {
+        // If validate code is implemented correctly, then unwrap() should
+        // never panic (we've already peeked at this value in order to match
+        // it.)
+        let value = self.map.remove(&key).unwrap();
+        match self.snaps.back_mut() {
+            Some(snap) => {
+                snap.push_back((key.clone(), value));
+            }
+            None => {
+                // Nothing to do if there's no snapshot;
+                // just discard the element.
+            }
         }
     }
 }
@@ -50,8 +110,8 @@ impl WorkingArray {
     }
 
     // When we start speculatively matching array elements (e.g. in a Choice
-    // or Occur), we may fail the match partway through, and need to rewind
-    // to the most recent snapshot.
+    // or Occur containing groups), we may fail the match partway through, and
+    // need to rewind to the most recent snapshot.
     //
     // It's possible for nested snapshots to exist; for example if we have a
     // group-of-choices nested inside a group-of-choices.
@@ -79,13 +139,13 @@ impl WorkingArray {
     fn commit(&mut self) {
         // If validate code is implemented correctly, then unwrap() should
         // never panic.
-        // This throws away the value that was popped; those values were
+        // This throws away the list that was popped; those values were
         // successfully matched and are no longer needed.
         self.snaps.pop_back().unwrap();
     }
 
     // Peek at the front of the working array.
-    fn peek_front(&self) -> Option<&Value>{
+    fn peek_front(&self) -> Option<&Value> {
         self.array.front()
     }
 
@@ -189,11 +249,13 @@ fn map_search_literal(literal: &Literal, working_map: &mut WorkingMap) -> TempRe
     // Find a key in the working map, looking for a match.
     // If we find one, remove that key.
     let search_key = Value::from(literal);
-    match working_map.map.remove(&search_key) {
+    match working_map.peek_at(&search_key) {
         Some(val) => {
-            // We found the key, and removed it from the working map.
-            // This means validation was successful.
-            Ok(val)
+            // We found the key.  Remove it from the working map.
+            let key2 = search_key.clone();
+            let val2 = val.clone();
+            working_map.remove(&key2);
+            Ok(val2)
         }
         None => {
             // We didn't find the key; return an error
@@ -211,14 +273,15 @@ fn map_search(node: &Node, working_map: &mut WorkingMap, ctx: &dyn Context) -> T
     // { * tstr => int, * tstr => tstr }
     // See rfc8610 section 3.5.4 for a longer explanation of "cuts".
 
-    for key in working_map.map.keys() {
+    for (key, value) in working_map.map.iter() {
         let attempt = validate(key, node, ctx);
         if attempt.is_ok() {
             // This key matches the node.  Remove the key and return success.
             // Some juggling is required to satisfy the borrow checker.
             let key2: Value = key.clone();
-            let val = working_map.map.remove(&key2).unwrap();
-            return Ok(val);
+            let value2 = value.clone();
+            working_map.remove(&key2);
+            return Ok(value2);
         }
     }
     // We searched all the keys without finding a match.  Validation fails.
@@ -492,12 +555,30 @@ fn validate_map_member(
             validate_map_unwrap(node, working_map, ctx)
         }
         Node::Group(g) => {
+            // As we call validate_array_member, we don't know how many items
+            // it might speculatively pop from the list.  So we'll take a snapshot
+            // now and commit our changes if we match successfully (and roll them
+            // back if it fails).
+            working_map.snapshot();
+
             // Recurse into each member of the group.
             for group_member in &g.members {
-                // Exit early if we hit an error.
-                validate_map_member(group_member, working_map, ctx)?;
+                match validate_map_member(group_member, working_map, ctx) {
+                    Ok(_) => {
+                        // So far so good...
+                    }
+                    Err(e) => {
+                        // Since we failed to validate the entire group, rewind to our most
+                        // recent snapshot.  This may put values back into the map,
+                        // so they can be matched by whatever we try next (or trigger
+                        // an error if they aren't consumed by anything).
+                        working_map.rewind();
+                        return Err(e);
+                    }
+                }
             }
             // All group members validated Ok.
+            working_map.commit();
             Ok(())
         }
         Node::Choice(c) => {
