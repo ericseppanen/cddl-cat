@@ -322,6 +322,19 @@ fn validate_array_member(
             let node = ctx.lookup_rule(&r.name)?;
             validate_array_unwrap(node, working_array, ctx)
         }
+        Node::Choice(c) => {
+            // We need to explore each of the possible choices.
+            // We can't use validate_array_value() because we'll lose our
+            // array context.
+            for option in &c.options {
+                if let Ok(()) = validate_array_member(option, working_array, ctx) {
+                    return Ok(());
+                }
+            }
+            // None of the choices worked.
+            let expected = format!("choice of {}", c.options.len());
+            Err(mismatch(expected))
+        }
         Node::Group(g) => {
             // As we call validate_array_member, we don't know how many items
             // it might speculatively pop from the list.  So we'll take a snapshot

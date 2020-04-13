@@ -97,6 +97,20 @@ fn validate_cbor_choice() {
     validate_cbor_bytes("thing", cddl_input, cbor::TEXT_IETF).unwrap();
     let err = validate_cbor_bytes("thing", cddl_input, cbor::BOOL_TRUE).unwrap_err();
     assert_eq!(err.to_string(), "Mismatch(expected choice of 2)");
+
+    let cddl_input = r#"thing = (foo / bar) foo = (int / float) bar = tstr"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_23).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_1_0).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_IETF).unwrap();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::BOOL_TRUE).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected choice of 2)");
+
+    let cddl_input = r#"thing = (int / float // tstr / bstr)"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_23).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::FLOAT_1_0).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_IETF).unwrap();
+    let err = validate_cbor_bytes("thing", cddl_input, cbor::BOOL_TRUE).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected choice of 2)");
 }
 
 #[test]
@@ -309,6 +323,16 @@ fn validate_cbor_array_groups() {
     let cddl_input = r#"thing = [a: int, b: bar] bar = (b: int, c: int)"#;
     let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
     assert_eq!(err.to_string(), "Unsupported standalone group");
+
+    // This is constructed to require backtracking by the validator:
+    // `foo` will consume an int before failing; we need to rewind to
+    // a previous state so that `bar` will match.
+    let cddl_input = r#"thing = [int, (foo // bar)] foo = (int, tstr) bar = (int, int)"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
+
+    // Test nested groups with lots of backtracking.
+    let cddl_input = r#"thing = [(int, (int, bool // (int, tstr // int, int)))]"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
 }
 
 #[test]
