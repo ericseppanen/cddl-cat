@@ -88,7 +88,19 @@
 //! - `float`, `float16`, `float32`, `float64`, `float16-32`, `float32-64` \
 //! Note: float sizes are not validated.
 //!
-//! Unimplemented features:
+//! Supported CDDL features:
+//! - Basic prelude types (integers, floats, bool, nil, text strings, byte strings)
+//! - Literal int, float, bool, UTF-8 text strings
+//! - Byte strings in UTF-8 or hex
+//! - Arrays and maps
+//! - Rule lookups by name
+//! - Groups
+//! - Choices (using `/` or `//` syntax)
+//! - Occurrences (`?`, `*`, `+`, or `m*n`)
+//! - Ranges (e.g. `1..7` or `1...8`)
+//! - Unwrapping (`~`)
+//!
+//! Unimplemented CDDL features:
 //! - Generics
 //! - Non-cut map keys
 //! - Extend type with `/=`
