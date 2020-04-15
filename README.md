@@ -100,10 +100,10 @@ Supported CDDL features:
 - Occurrences (`?`, `*`, `+`, or `m*n`)
 - Ranges (e.g. `1..7` or `1...8`)
 - Unwrapping (`~`)
+- Map keys with cut syntax (`^ =>`)
 
 Unimplemented features:
 - Generics
-- Non-cut map keys
 - Extend type with `/=`
 - Extend group with `//=`
 - Type sockets with `$`

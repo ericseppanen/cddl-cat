@@ -193,11 +193,11 @@ pub(crate) fn validate(value: &Value, node: &Node, ctx: &dyn Context) -> Validat
 // Perform map key search.
 // Some keys (literal values) can be found with a fast search, while
 // others may require a linear search.
-fn validate_workingmap(
-    value_map: &mut WorkingMap,
+fn validate_map_key<'a>(
+    value_map: &'a mut WorkingMap,
     node: &Node,
     ctx: &dyn Context,
-) -> TempResult<Value> {
+) -> TempResult<(Value, &'a Value)> {
     match node {
         Node::Literal(l) => map_search_literal(l, value_map),
         _ => map_search(node, value_map, ctx),
@@ -209,8 +209,17 @@ fn validate_workingmap(
 /// If any of the options matches, this validation is successful.
 pub fn validate_choice(choice: &Choice, value: &Value, ctx: &dyn Context) -> ValidateResult {
     for node in &choice.options {
-        if let Ok(()) = validate(value, node, ctx) {
-            return Ok(());
+        match validate(value, node, ctx) {
+            Ok(()) => {
+                return Ok(());
+            }
+            Err(e) => {
+                // Only fail if the error is considered fatal.
+                // Otherwise, we'll keep trying other options.
+                if e.is_fatal() {
+                    return Err(e);
+                }
+            }
         }
     }
     let expected = format!("choice of {}", choice.options.len());
@@ -245,18 +254,14 @@ fn validate_literal(literal: &Literal, value: &Value) -> ValidateResult {
     Err(mismatch(format!("{}", literal)))
 }
 
-fn map_search_literal(literal: &Literal, working_map: &mut WorkingMap) -> TempResult<Value> {
-    // Find a key in the working map, looking for a match.
-    // If we find one, remove that key.
+// Find a specific key in the map and return that key plus a reference to its value.
+fn map_search_literal<'a>(
+    literal: &Literal,
+    working_map: &'a mut WorkingMap,
+) -> TempResult<(Value, &'a Value)> {
     let search_key = Value::from(literal);
     match working_map.peek_at(&search_key) {
-        Some(val) => {
-            // We found the key.  Remove it from the working map.
-            let key2 = search_key.clone();
-            let val2 = val.clone();
-            working_map.remove(&key2);
-            Ok(val2)
-        }
+        Some(val) => Ok((search_key, val)),
         None => {
             // We didn't find the key; return an error
             Err(mismatch(format!("map{{{}}}", literal)))
@@ -264,28 +269,21 @@ fn map_search_literal(literal: &Literal, working_map: &mut WorkingMap) -> TempRe
     }
 }
 
-fn map_search(node: &Node, working_map: &mut WorkingMap, ctx: &dyn Context) -> TempResult<Value> {
-    // Iterate over each key in the working map, looking for a match.
-    // If we find one, remove that key.
-    // This is less efficient than map_search_literal.
-    // Note: we remove the key before learning whether the key's value
-    // has matched.  So we can't support non-"cut" semantics like:
-    // { * tstr => int, * tstr => tstr }
-    // See rfc8610 section 3.5.4 for a longer explanation of "cuts".
-
+// Iterate over each key in the working map, looking for a match.
+// If we find a match, return a copy of the key, and a reference to the value.
+// This is less efficient than map_search_literal.
+fn map_search<'a>(
+    node: &Node,
+    working_map: &'a mut WorkingMap,
+    ctx: &dyn Context,
+) -> TempResult<(Value, &'a Value)> {
     for (key, value) in working_map.map.iter() {
         let attempt = validate(key, node, ctx);
         if attempt.is_ok() {
-            // This key matches the node.  Remove the key and return success.
-            // Some juggling is required to satisfy the borrow checker.
-            let key2: Value = key.clone();
-            let value2 = value.clone();
-            working_map.remove(&key2);
-            return Ok(value2);
+            return Ok((key.clone(), value));
         }
     }
     // We searched all the keys without finding a match.  Validation fails.
-    // FIXME: node could expand to a giant string.  Need some kind of helper fn?
     Err(mismatch(format!("map{{{}}}", node)))
 }
 
@@ -390,8 +388,17 @@ fn validate_array_member(
             // We can't use validate_array_value() because we'll lose our
             // array context.
             for option in &c.options {
-                if let Ok(()) = validate_array_member(option, working_array, ctx) {
-                    return Ok(());
+                match validate_array_member(option, working_array, ctx) {
+                    Ok(()) => {
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        // Only fail if the error is considered fatal.
+                        // Otherwise, we'll keep trying other options.
+                        if e.is_fatal() {
+                            return Err(e);
+                        }
+                    }
                 }
             }
             // None of the choices worked.
@@ -462,7 +469,16 @@ fn validate_array_occur(
     loop {
         match validate_array_member(&occur.node, working_array, ctx) {
             Ok(_) => (),
-            Err(_) => break,
+            Err(e) => {
+                if e.is_mismatch() {
+                    // Stop trying to match this occurrence.
+                    break;
+                }
+                // The error is something serious (e.g. MissingRule or
+                // Unsupported).  We should fail now and propagate that
+                // error upward.
+                return Err(e);
+            }
         }
         count += 1;
         if count >= upper_limit {
@@ -519,7 +535,11 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap, ctx: &dyn Context) -> Valid
     let mut working_map = WorkingMap::new(value_map);
 
     for member in &m.members {
-        validate_map_member(member, &mut working_map, ctx)?;
+        validate_map_member(member, &mut working_map, ctx).map_err(|e| {
+            // If a MapCut error pops out here, change it to a Mismatch, so that
+            // it can't cause trouble in nested maps.
+            e.erase_mapcut()
+        })?;
     }
     if working_map.map.is_empty() {
         Ok(())
@@ -556,9 +576,9 @@ fn validate_map_member(
         }
         Node::Group(g) => {
             // As we call validate_array_member, we don't know how many items
-            // it might speculatively pop from the list.  So we'll take a snapshot
-            // now and commit our changes if we match successfully (and roll them
-            // back if it fails).
+            // it might speculatively pop from the list.  So we'll take a
+            // snapshot now and commit our changes if we match successfully
+            // (and roll them back if it fails).
             working_map.snapshot();
 
             // Recurse into each member of the group.
@@ -568,12 +588,16 @@ fn validate_map_member(
                         // So far so good...
                     }
                     Err(e) => {
-                        // Since we failed to validate the entire group, rewind to our most
-                        // recent snapshot.  This may put values back into the map,
-                        // so they can be matched by whatever we try next (or trigger
-                        // an error if they aren't consumed by anything).
+                        // Since we failed to validate the entire group,
+                        // rewind to our most recent snapshot.  This may put
+                        // values back into the map, so they can be matched by
+                        // whatever we try next (or trigger an error if they
+                        // aren't consumed by anything).
                         working_map.rewind();
-                        return Err(e);
+
+                        // Also forget any MapCut errors, so that a sibling
+                        // group may succeed where we failed.
+                        return Err(e.erase_mapcut());
                     }
                 }
             }
@@ -583,13 +607,19 @@ fn validate_map_member(
         }
         Node::Choice(c) => {
             // We need to explore each of the possible choices.
-            // FIXME: need to checkpoint the WorkingMap before trying each
-            // option, because we may fail the choice and need to back out
-            // any changes.  Need a unit test to test this behavior.
-            // Recurse into each member of the group.
             for option in &c.options {
-                if let Ok(()) = validate_map_member(option, working_map, ctx) {
-                    return Ok(());
+                match validate_map_member(option, working_map, ctx) {
+                    Ok(()) => {
+                        return Ok(());
+                    }
+                    Err(e) => {
+                        // We can keep trying other options as long as the
+                        // error is a Mismatch, not a MapCut or something
+                        // fatal.
+                        if !e.is_mismatch() {
+                            return Err(e);
+                        }
+                    }
                 }
             }
             // None of the choices worked.
@@ -637,7 +667,16 @@ fn validate_map_occur(
     loop {
         match validate_map_member(&occur.node, working_map, ctx) {
             Ok(_) => (),
-            Err(_) => break,
+            Err(e) => {
+                if e.is_mismatch() {
+                    // Stop trying to match this occurrence.
+                    break;
+                }
+                // Either we got a MapCut error, or it's something even more
+                // serious (e.g. MissingRule or Unsupported).  We should fail
+                // now and propagate that error upward.
+                return Err(e);
+            }
         }
         count += 1;
         if count >= upper_limit {
@@ -660,17 +699,41 @@ fn validate_map_keyvalue(
     working_map: &mut WorkingMap,
     ctx: &dyn Context,
 ) -> ValidateResult {
+    // CDDL syntax reminder:
+    //   a => b   ; non-cut
+    //   a ^ => b ; cut
+    //   a: b     ; cut
+    //
+    // If we're using "cut" semantics, a partial match (key matches + value
+    // mismatch) should force validation failure for the entire map.  We
+    // signal this to our caller with a MapCut error.
+    // If we're using "non-cut" semantics, a partial match will leave the
+    // key-value pair in place, in the hope it may match something else.
+
     let key_node = &kv.key;
     let val_node = &kv.value;
+    let cut = kv.cut;
 
-    // This is using WorkingMap::Validate, which returns a Value.
-    // A successful key match has the side-effect of removing that key from
-    // the working map (and returning its value to us.)
     // If we fail to validate a key, exit now with an error.
-    let extracted_val: Value = validate_workingmap(working_map, key_node, ctx)?;
+    let (working_key, working_val) = validate_map_key(working_map, key_node, ctx)?;
 
     // Match the value that was returned.
-    validate(&extracted_val, val_node, ctx)
+    match validate(working_val, val_node, ctx) {
+        Ok(()) => {
+            working_map.remove(&working_key);
+            Ok(())
+        }
+        Err(e) => {
+            match (cut, e) {
+                (true, ValidateError::Mismatch(m)) => {
+                    // If "cut" semantics are in force, then rewrite Mismatch errors.
+                    // This allows special handling when nested inside Occur nodes.
+                    Err(ValidateError::MapCut(m))
+                }
+                (_, x) => Err(x),
+            }
+        }
+    }
 }
 
 fn validate_standalone_group(g: &Group, value: &Value, ctx: &dyn Context) -> ValidateResult {

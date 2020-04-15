@@ -314,9 +314,10 @@ fn occur_wrap(occur: &Option<ast::Occur>, node: Node) -> Node {
 fn flatten_member(member: &ast::Member) -> FlattenResult<Node> {
     match &member.key {
         Some(key) => {
+            let cut = key.cut;
             let key = flatten_memberkey(&key)?;
             let value = flatten_type(&member.value)?;
-            Ok(Node::KeyValue(KeyValue::new(key, value)))
+            Ok(Node::KeyValue(KeyValue::new(key, value, cut)))
         }
         None => flatten_type(&member.value),
     }
@@ -338,10 +339,7 @@ where
 fn flatten_memberkey(memberkey: &ast::MemberKey) -> FlattenResult<Node> {
     use ast::MemberKeyVal;
 
-    // FIXME: handle cut
-
-    let memberkey_val = &memberkey.val;
-    match memberkey_val {
+    match &memberkey.val {
         MemberKeyVal::Bareword(s) => {
             // A "bareword" is a literal string that appears without quote
             // marks.  Treat it just like we would a literal with quotes.

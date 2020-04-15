@@ -358,17 +358,6 @@ fn validate_json_map() {
     let cddl_input = r#"thing = {+ tstr => any}"#;
     validate_json_str("thing", cddl_input, &json_str).unwrap();
 
-    if false {
-        // The "=>" syntax has implicit non-cut semantics; a key mismatch
-        // shouldn't cause the key to be "consumed" from the map.  We don't
-        // support non-cut semantics yet, so this test fails.
-
-        // Should fail because the JSON input has one entry that can't be
-        // collected because the value type doesn't match.
-        let cddl_input = r#"thing = {* tstr => int}"#;
-        validate_json_str("thing", cddl_input, &json_str).unwrap_err();
-    }
-
     // Should fail because the JSON input has two entries that can't be
     // collected because the key type doesn't match.
     let cddl_input = r#"thing = {* int => any}"#;
@@ -379,6 +368,83 @@ fn validate_json_map() {
 
     let cddl_input = r#"thing = {x: int, y: int, z: int}"#;
     validate_json_str("thing", cddl_input, "[1, 2, 3]").unwrap_err();
+}
+
+#[test]
+fn validate_json_map_cut() {
+    let json_str = r#"{ "foo": "not-an-int" }"#;
+
+    // This uses non-cut semantics: the "foo" key matches, but because the value
+    // doesn't match we allow "foo" to match the second member instead.
+    let cddl = r#"
+        thing = {
+            ? "foo" => int,  ; non-cut is the default for "=>"
+            tstr => tstr,
+        }"#;
+    validate_json_str("thing", cddl, &json_str).unwrap();
+
+    // This uses cut semantics: the "foo" key matches, but because the value
+    // doesn't match we prevent it from matching any later rules.
+    let cddl = r#"
+        thing = {
+            ? "foo" ^ => int,  ; cut is indicated by "^"
+            tstr => tstr,
+        }"#;
+    let err = validate_json_str("thing", cddl, &json_str).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected int)");
+
+    // Only "=>" can ever be non-cut.  Members using ":" always get
+    // cut semantics.
+    let cddl = r#"
+        thing = {
+            ? "foo": int,  ; cut is implied by ":"
+            tstr => tstr,
+        }"#;
+    validate_json_str("thing", cddl, &json_str).unwrap_err();
+
+    // Just a sanity check to ensure that non-cut matches work.
+    let json_str = r#"{ "foo": 17, "bar": "baz" }"#;
+    let cddl = r#"
+        thing = {
+            ? "foo" => int,
+            tstr => tstr,
+        }"#;
+    validate_json_str("thing", cddl, &json_str).unwrap();
+
+    // Same as the previous, but with the catch-all statement first.
+    let cddl = r#"
+        thing = {
+            tstr => tstr,
+            ? "foo" => int,
+        }"#;
+    validate_json_str("thing", cddl, &json_str).unwrap();
+
+    // It's not really possible to enforce cut semantics on choices, because
+    // in a map, choices between key-value pairs are represented as groups.
+    // We want the "cut" to end at the group boundary, so that things like
+    // this can work:
+    //
+    // palette_entry = (color: tstr, position: int)
+    // rgba = (color: int, alpha: int)
+    // { palette_entry // rgba }
+    // Each map is unambiguous by itself; we shouldn't fail the second group
+    // because the first group happened to use "color" to mean a different
+    // thing.
+    //
+    // Make sure this decision sticks, at least until we change that policy.
+    let cddl = r#"thing = { "foo": int // tstr => tstr }"#;
+    let json_str = r#"{ "foo": "not-int" }"#;
+    validate_json_str("thing", cddl, &json_str).unwrap();
+
+    // This example should fail; the cut semantics should cause the non-
+    // matching key-value pair to be ignored from further match consideration.
+    // Depending on the order we inspect the map, we risk validating this JSON
+    // because the "zzz" failure may only terminate the occurrence; we need to
+    // ensure it fails the validation of the entire map.
+    let json_str = r#"{ "aaa": 17, "zzz": "baz" }"#;
+    let cddl = r#"thing = {* tstr ^ => int }"#;
+    let err = validate_json_str("thing", cddl, &json_str).unwrap_err();
+    assert_eq!(err.to_string(), "Mismatch(expected int)");
 }
 
 #[derive(Debug, Serialize)]
@@ -436,14 +502,19 @@ fn validate_choice_example() {
     let json_str = serde_json::to_string(&input).unwrap();
     validate_json_str("address", cddl_input, &json_str).unwrap();
 
-    let input = StreetNumber {
-        street: "Eleventh St.".to_string(),
-        number: None,
-        name: "San Francisco".to_string(),
-        zip_code: 94103,
-    };
-    let json_str = serde_json::to_string(&input).unwrap();
-    validate_json_str("address", cddl_input, &json_str).unwrap();
+    if false {
+        // FIXME: serde_json doesn't leave out the "number" field, as CDDL "?" expects.
+        // Instead, it gives me a null value, which doesn't match.  Cut semantics
+        // force this to be a validation failure.
+        let input = StreetNumber {
+            street: "Eleventh St.".to_string(),
+            number: None,
+            name: "San Francisco".to_string(),
+            zip_code: 94103,
+        };
+        let json_str = serde_json::to_string(&input).unwrap();
+        validate_json_str("address", cddl_input, &json_str).unwrap();
+    }
 
     let input = Pickup { per_pickup: true };
     let json_str = serde_json::to_string(&input).unwrap();

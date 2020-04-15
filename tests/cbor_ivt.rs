@@ -84,7 +84,8 @@ fn validate_map() {
         .map(|kv| {
             let key = literal_text(kv.0);
             let value = Node::PreludeType(kv.1);
-            Node::KeyValue(KeyValue::new(key, value))
+            let cut = true;
+            Node::KeyValue(KeyValue::new(key, value, cut))
         })
         .collect();
     let node = &Node::Map(Map { members: kv_vec });

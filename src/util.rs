@@ -17,12 +17,43 @@ pub enum ValidateError {
     Structural(String),
     /// A data mismatch during validation.
     Mismatch(Mismatch),
+    /// A map key-value cut error.
+    MapCut(Mismatch),
     /// A CDDL rule lookup failed.
     MissingRule(String),
     /// A CDDL feature that is unsupported.
     Unsupported(String),
     /// A data value that can't be validated by CDDL.
     ValueError(String),
+}
+
+impl ValidateError {
+    /// Identify whether this error is fatal
+    ///
+    /// A "fatal" error is one that should fail the entire validation, even if
+    /// it occurs inside a choice or occurrence that might otherwise succeed.
+    pub(crate) fn is_fatal(&self) -> bool {
+        match self {
+            ValidateError::Mismatch(_) => false,
+            ValidateError::MapCut(_) => false,
+            _ => true,
+        }
+    }
+
+    /// Convert a MapCut error to a Mismatch error; otherwise return the original error.
+    pub(crate) fn erase_mapcut(self) -> ValidateError {
+        match self {
+            ValidateError::MapCut(m) => ValidateError::Mismatch(m),
+            _ => self,
+        }
+    }
+
+    pub(crate) fn is_mismatch(&self) -> bool {
+        match self {
+            ValidateError::Mismatch(_) => true,
+            _ => false,
+        }
+    }
 }
 
 /// A data mismatch during validation.
@@ -48,7 +79,11 @@ impl fmt::Display for ValidateError {
         match self {
             ParseError(p) => p.fmt(f),
             Structural(msg) => write!(f, "Structural({})", msg),
+            // The difference between Mismatch and MapCut is that they trigger
+            // slightly different internal behaivor; to a human reader they mean
+            // the same thing so we will Display them the same way.
             Mismatch(mismatch) => write!(f, "Mismatch(expected {})", mismatch.expected),
+            MapCut(mismatch) => write!(f, "Mismatch(expected {})", mismatch.expected),
             MissingRule(rule) => write!(f, "MissingRule({})", rule),
             Unsupported(msg) => write!(f, "Unsupported {}", msg),
             ValueError(msg) => write!(f, "ValueError({})", msg),

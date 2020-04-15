@@ -119,19 +119,48 @@ pub struct Choice {
 }
 
 /// A key-value pair; key and value can be anything (types, arrays, maps, etc.)
+///
+/// "Cut" means a match on this key will prevent any later keys from matching.
+///
+/// For example, a map containing `"optional-key": "hello"`
+/// would be permitted to match the following:
+///
+/// ```text
+/// extensible-map-example = {
+///     ? "optional-key" => int,
+///     * tstr => any
+/// }
+/// ```
+/// If we add the cut symbol `^`, the same map would not match:
+///
+/// ```text
+/// extensible-map-example = {
+///     ? "optional-key" ^ => int,
+///     * tstr => any
+/// }
+/// ```
+///
+/// Note: CDDL map members that use `:` always use cut semantics.
+///
+/// See RFC8610 3.5.4 for more discussion.
+///
 #[derive(Clone)]
 #[allow(missing_docs)]
 pub struct KeyValue {
     pub key: Box<Node>,
     pub value: Box<Node>,
+    pub cut: IsCut,
 }
+
+pub(crate) type IsCut = bool;
 
 impl KeyValue {
     #[doc(hidden)] // Only pub for integration tests
-    pub fn new(key: Node, value: Node) -> KeyValue {
+    pub fn new(key: Node, value: Node, cut: IsCut) -> KeyValue {
         KeyValue {
             key: Box::new(key),
             value: Box::new(value),
+            cut,
         }
     }
 }
