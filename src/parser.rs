@@ -547,9 +547,26 @@ fn memberkey_type1(input: &str) -> JResult<&str, MemberKey> {
     ));
     map(f, |(ty1, cut, _)| MemberKey{
         val: MemberKeyVal::Type1(ty1),
-        cut: cut.is_some(), // FIXME: need unit test for cut
+        cut: cut.is_some(),
     })
     (input)
+}
+
+#[test]
+fn test_memberkey_type1() {
+    let result = memberkey_type1("a => b");
+    let result = format!("{:?}", result);
+    assert_eq!(
+        result,
+        r#"Ok((" b", MemberKey { val: Type1(Simple(Typename("a"))), cut: false }))"#
+    );
+
+    let result = memberkey_type1("a ^ => b");
+    let result = format!("{:?}", result);
+    assert_eq!(
+        result,
+        r#"Ok((" b", MemberKey { val: Type1(Simple(Typename("a"))), cut: true }))"#
+    );
 }
 
 #[rustfmt::skip]
