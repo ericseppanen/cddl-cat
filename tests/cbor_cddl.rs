@@ -243,19 +243,6 @@ struct ShortTuple(String);
 struct KitchenSink(String, u32, f64, bool);
 
 #[test]
-#[ignore]
-// I'm not sure how much sense this particular test makes.  My guess
-// is that groups really only make sense in the context of an array
-// or map, since I haven't found any way to encode a "group-like"
-// sequence of data.  So the only thing that could even validate
-// against a group directly would be a single value, and I'm not
-// sure that really makes sense.
-fn validate_cbor_group() {
-    let cddl_input = r#"thing = (* int)"#;
-    validate_cbor_bytes("thing", cddl_input, cbor::INT_0).unwrap();
-}
-
-#[test]
 fn validate_cbor_homogenous_array() {
     let cddl_input = r#"thing = [* int]"#; // zero or more
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap();
