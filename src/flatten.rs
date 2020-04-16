@@ -375,7 +375,6 @@ fn test_flatten_prelude_reference() {
 }
 
 #[test]
-#[ignore] // FIXME: choking on dangling type reference
 fn test_flatten_type_reference() {
     let cddl_input = r#"thing = foo"#;
     let result = flatten_from_str(cddl_input).unwrap();
@@ -414,6 +413,5 @@ fn test_flatten_map() {
         r#"{"foo": Literal(Text("bar")), "thing": Map(Map { members: ["#,
         r#"KeyValue(KeyValue(Rule(Rule { name: "foo" }), PreludeType(Tstr)))] })}"#
     );
-    // FIXME: is Rule the right output?  What if "abc" was a group name?
     assert_eq!(result, expected);
 }
