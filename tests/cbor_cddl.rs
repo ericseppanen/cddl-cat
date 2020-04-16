@@ -545,7 +545,7 @@ fn validate_cbor_map() {
 #[derive(Debug, Serialize)]
 struct StreetNumber {
     street: String,
-    number: Option<u32>,
+    number: u32,
     name: String,
     zip_code: u32,
 }
@@ -589,26 +589,12 @@ fn validate_choice_example() {
 
     let input = StreetNumber {
         street: "Eleventh St.".to_string(),
-        number: Some(375),
+        number: 375,
         name: "San Francisco".to_string(),
         zip_code: 94103,
     };
     let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
     validate_cbor_bytes("address", cddl_input, &cbor_bytes).unwrap();
-
-    if false {
-        // FIXME: serde_cbor doesn't leave out the "number" field, as CDDL "?" expects.
-        // Instead, it gives me a value of "nil", which doesn't match.  Cut semantics
-        // force this to be a validation failure.
-        let input = StreetNumber {
-            street: "Eleventh St.".to_string(),
-            number: None,
-            name: "San Francisco".to_string(),
-            zip_code: 94103,
-        };
-        let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
-        validate_cbor_bytes("address", cddl_input, &cbor_bytes).unwrap();
-    }
 
     let input = Pickup { per_pickup: true };
     let cbor_bytes = serde_cbor::to_vec(&input).unwrap();

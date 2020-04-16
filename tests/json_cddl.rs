@@ -450,7 +450,7 @@ fn validate_json_map_cut() {
 #[derive(Debug, Serialize)]
 struct StreetNumber {
     street: String,
-    number: Option<u32>,
+    number: u32,
     name: String,
     zip_code: u32,
 }
@@ -469,15 +469,14 @@ struct Pickup {
 
 #[test]
 fn validate_choice_example() {
-    // This is an example from rfc8610 2.2.2
-    // modifications from the RFC example:
-    // 1. The bareword "number" has been changed to "number"; otherwise the parser gets confused.
-    // 2. Substitute "_" for "-" in barewords.
+    // This is an example from RFC8610 2.2.2
+    // The only modification from the RFC example is to substitute "_" for "-" in barewords,
+    // for compatibility with serde_json.
     let cddl_input = r#"
         address = { delivery }
 
         delivery = (
-        street: tstr, ? "number": uint, city //
+        street: tstr, ? number: uint, city //
         po_box: uint, city //
         per_pickup: true )
 
@@ -495,26 +494,19 @@ fn validate_choice_example() {
 
     let input = StreetNumber {
         street: "Eleventh St.".to_string(),
-        number: Some(375),
+        number: 375,
         name: "San Francisco".to_string(),
         zip_code: 94103,
     };
     let json_str = serde_json::to_string(&input).unwrap();
     validate_json_str("address", cddl_input, &json_str).unwrap();
 
-    if false {
-        // FIXME: serde_json doesn't leave out the "number" field, as CDDL "?" expects.
-        // Instead, it gives me a null value, which doesn't match.  Cut semantics
-        // force this to be a validation failure.
-        let input = StreetNumber {
-            street: "Eleventh St.".to_string(),
-            number: None,
-            name: "San Francisco".to_string(),
-            zip_code: 94103,
-        };
-        let json_str = serde_json::to_string(&input).unwrap();
-        validate_json_str("address", cddl_input, &json_str).unwrap();
-    }
+    let json_str = r#"{
+        "street": "Eleventh St.",
+        "name": "San Francisco",
+        "zip_code": 94103
+    }"#;
+    validate_json_str("address", cddl_input, &json_str).unwrap();
 
     let input = Pickup { per_pickup: true };
     let json_str = serde_json::to_string(&input).unwrap();
