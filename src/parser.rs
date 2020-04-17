@@ -12,6 +12,7 @@
 //! ```
 
 use crate::ast::*;
+use escape8259::unescape;
 use nom::{
     branch::alt,
     bytes::complete::{tag, take_while, take_while1},
@@ -47,6 +48,8 @@ pub enum ErrorKind {
     MalformedFloat,
     /// A hex literal didn't parse correctly.
     MalformedHex,
+    /// A malformed text string
+    MalformedText,
     /// A nonspecific parsing error.
     Unparseable,
 }
@@ -481,13 +484,17 @@ fn schar(input: &str) -> JResult<&str, &str> {
 }
 
 #[rustfmt::skip]
-fn text_literal(input: &str) -> JResult<&str, &str> {
-    delimited(
+fn text_literal(input: &str) -> JResult<&str, String> {
+    let f = delimited(
         charx('"'),
         schar,
         charx('"')
-    )(input)
-    // FIXME: need need to remove the backslash '\' chars when escaping occurs.
+    );
+
+    map_res(f, |s| {
+        unescape(s).map_err(|_| parse_error(MalformedText, s) )
+    })
+    (input)
 }
 
 #[test]
@@ -512,6 +519,10 @@ fn test_text() {
 
     assert!(text_literal("\"a\nb").is_err());
     assert!(text_literal("abc").is_err());
+
+    assert_eq!(text_literal(r#""a\nb""#), Ok(("", "a\nb".into())));
+    assert_eq!(text_literal(r#""\uD834\uDD1E""#), Ok(("", "𝄞".into())));
+    assert_eq!(text_literal(r#""の""#), Ok(("", "の".into())));
 }
 
 // value = number / text / bytes
@@ -520,7 +531,7 @@ fn test_text() {
 fn value(input: &str) -> JResult<&str, Value> {
     alt((
         float_or_int,
-        map(text_literal, |s| Value::Text(s.into())),
+        map(text_literal, Value::Text),
         map(bytestring, Value::Bytes),
     ))(input)
 }
