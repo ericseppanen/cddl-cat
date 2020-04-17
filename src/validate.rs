@@ -77,14 +77,10 @@ impl WorkingMap {
         // never panic (we've already peeked at this value in order to match
         // it.)
         let value = self.map.remove(&key).unwrap();
-        match self.snaps.back_mut() {
-            Some(snap) => {
-                snap.push_back((key.clone(), value));
-            }
-            None => {
-                // Nothing to do if there's no snapshot;
-                // just discard the element.
-            }
+        // If there is a current snapshot, preserve this element
+        // for later rewind.
+        if let Some(snap) = self.snaps.back_mut() {
+            snap.push_back((key.clone(), value));
         }
     }
 }
@@ -157,14 +153,10 @@ impl WorkingArray {
         // never panic (we've already peeked at this value in order to match
         // it.)
         let element = self.array.pop_front().unwrap();
-        match self.snaps.back_mut() {
-            Some(snap) => {
-                snap.push_back(element);
-            }
-            None => {
-                // Nothing to do if there's no snapshot;
-                // just discard the element.
-            }
+        // If there is a current snapshot, preserve this element
+        // for later rewind.
+        if let Some(snap) = self.snaps.back_mut() {
+            snap.push_back(element);
         }
     }
 }
