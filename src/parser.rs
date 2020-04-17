@@ -19,7 +19,7 @@ use nom::{
         alpha0, anychar, char as charx, digit1, hex_digit1, multispace1, not_line_ending, one_of,
     },
     combinator::{all_consuming, map, map_res, opt, recognize, value as valuex},
-    multi::{fold_many0, many0, many1, separated_nonempty_list},
+    multi::{many0, many1, separated_nonempty_list},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
 };
 use std::error;
@@ -131,20 +131,18 @@ fn comment(input: &str) -> JResult<&str, &str> {
 }
 
 // Any amount of whitespace (including none) (including comments)
+// Note: this counts tab characters as whitespace, which differs from RFC8610.
 #[rustfmt::skip]
 fn ws(input: &str) -> JResult<&str, &str> {
-    let inner = alt((
-        // multispace1 includes tabs, which isn't part of the rfc.
-        multispace1,
-        comment
-    ));
-
-    // This will discard each result as it's gathered.
-    // FIXME: try the "value" combinator instead?
-    fold_many0(inner, "", |_acc, _x| {
-        //println!("ws '{}'", x);
-        ""
-    })
+    recognize(
+        many0(
+            alt((
+                // multispace1 includes tabs
+                multispace1,
+                comment
+            ))
+        )
+    )
     (input)
 }
 
