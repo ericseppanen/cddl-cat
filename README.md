@@ -111,8 +111,7 @@ Unimplemented features:
 - Control operators, e.g. `.size`, `.bits`, ...
 - Group enumeration with `&`
 - Tagged data with `#`
-- Literal integers with `0x` or `0b`
-- Hexfloat
+- Hexfloat literals (e.g. `0x1.921fb5p+1`)
 - Base64 bytestring literals (`b64'...'`)
 - Prelude types that invoke CBOR tags (e.g. `tdate` or `biguint`)
 
