@@ -17,12 +17,14 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, take_while, take_while1},
     character::complete::{
-        alpha0, anychar, char as charx, digit1, hex_digit1, multispace1, not_line_ending, one_of,
+        alpha0, anychar, char as charx, digit0, digit1, hex_digit1, multispace1, not_line_ending,
+        one_of,
     },
     combinator::{all_consuming, map, map_res, opt, recognize, value as valuex},
     multi::{many0, many1, separated_nonempty_list},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
 };
+use std::convert::TryFrom;
 use std::error;
 use std::fmt;
 
@@ -226,25 +228,109 @@ fn test_ident() {
     assert!(ident("1a").is_err());
 }
 
+// uint = DIGIT1 *DIGIT
+//      / "0x" 1*HEXDIG
+//      / "0b" 1*BINDIG
+//      / "0"
 #[rustfmt::skip]
-fn uint(input: &str) -> JResult<&str, u64> {
-    map_res(digit1, |x: &str| {
-        x.parse::<u64>().map_err(|_| {
-            parse_error(MalformedInteger, input)
+fn uint_hex(input: &str) -> JResult<&str, &str> {
+    preceded(
+        tag("0x"),
+        hex_digit1
+    )
+    (input)
+}
+
+#[rustfmt::skip]
+fn uint_binary(input: &str) -> JResult<&str, &str> {
+    preceded(
+        tag("0b"),
+        recognize(many1(one_of("01")))
+    )
+    (input)
+}
+
+#[rustfmt::skip]
+fn uint_decimal(input: &str) -> JResult<&str, &str> {
+    alt((
+        tag("0"),
+        recognize(
+            pair(
+                one_of("123456789"),
+                digit0
+            )
+        )
+    ))
+    (input)
+}
+
+// Parsing of integers, floats, etc. can get pretty complicated.  Because
+// different downstream parsers may want the integer in different forms, we
+// store its information in a temporary struct that preserves the original
+// string slice along with some context that will help us remember what that
+// string represents.
+struct RawUint<'a> {
+    slice: &'a str,
+    base: u32,
+}
+
+// Parse the string for uint; return the slice and the intended base (radix).
+#[rustfmt::skip]
+fn uint(input: &str) -> JResult<&str, RawUint> {
+    alt((
+        map(uint_hex, |slice| RawUint{slice, base: 16}),
+        map(uint_binary, |slice| RawUint{slice, base: 2}),
+        map(uint_decimal, |slice| {
+            RawUint{slice, base: 10}
+        }),
+    ))
+    (input)
+}
+
+// Extract an unsigned integer using the correct base (radix).
+#[rustfmt::skip]
+fn uint_u64(input: &str) -> JResult<&str, u64> {
+    map_res(uint, |raw| {
+        u64::from_str_radix(raw.slice, raw.base)
+        .map_err(|_| {
+            parse_error(MalformedInteger, raw.slice)
         })
     })
     (input)
 }
 
-// The string representation of a signed integer
+#[test]
+fn test_uint() {
+    assert_eq!(uint_u64("999"), Ok(("", 999)));
+    assert_eq!(uint_u64("0"), Ok(("", 0)));
+    assert_eq!(uint_u64("0x100"), Ok(("", 256)));
+    assert_eq!(uint_u64("0b101"), Ok(("", 5)));
+    // We're not supposed to parse leading zeros.
+    assert_eq!(uint_u64("00"), Ok(("0", 0)));
+}
+
+// Like RawUint, this is a temporary representation so we can
+// preserve both the string slice and some metadata about it.
+struct RawInt<'a> {
+    slice: &'a str,
+    base: u32,
+    neg: bool,
+}
+
+// A signed integer
 #[rustfmt::skip]
-fn int_str(input: &str) -> JResult<&str, &str> {
-    recognize(
-        preceded(
-            opt(charx('-')),
-            digit1
-        )
-    )
+fn int(input: &str) -> JResult<&str, RawInt> {
+    let f = pair(
+        opt(charx('-')),
+        uint
+    );
+    map(f, |(optneg, rawuint)| {
+        RawInt {
+            slice: rawuint.slice,
+            base: rawuint.base,
+            neg: optneg.is_some(),
+        }
+    })
     (input)
 }
 
@@ -285,46 +371,55 @@ fn parse_float(s: &str) -> Result<Value, ParseError> {
     }
 }
 
-// A helper function for converting string -> Value::Xint,
+// A helper function for converting RawInt -> Value::Xint,
 // and mapping to the right error type
-#[rustfmt::skip]
-fn parse_int(s: &str) -> Result<Value, ParseError> {
-    if s.starts_with('-') {
-        match s.parse::<i64>() {
-            Ok(fl) => Ok(Value::Nint(fl)),
-            Err(_) => Err(parse_error(MalformedInteger, s)),
-        }
+fn parse_int(raw: RawInt) -> Result<Value, ParseError> {
+    // Note: the string slice doesn't contain the '-' character, so we
+    // need to handle that ourselves.
+    let posint = u64::from_str_radix(raw.slice, raw.base)
+        .map_err(|_| parse_error(MalformedInteger, raw.slice))?;
+
+    if raw.neg {
+        // i64 has a larger positive range than negative range, so if we
+        // survive the conversion to i64 then unary `-` must succeed.
+        let negint = i64::try_from(posint).map_err(|_| parse_error(MalformedInteger, raw.slice))?;
+        Ok(Value::Nint(-negint))
     } else {
-        match s.parse::<u64>() {
-            Ok(fl) => Ok(Value::Uint(fl)),
-            Err(_) => Err(parse_error(MalformedInteger, s)),
-        }
+        Ok(Value::Uint(posint))
     }
+}
+
+// A rough approximation of nom's offset() function, allowing us to
+// do something like nom's recognize() without losing the inner types.
+fn offset(whole: &str, part: &str) -> usize {
+    part.as_ptr() as usize - whole.as_ptr() as usize
 }
 
 // int ["." fraction] ["e" exponent ]
 // (must have at least one of the latter two to be a float)
-#[rustfmt::skip]
+//#[rustfmt::skip]
 fn float_or_int(input: &str) -> JResult<&str, Value> {
-    let f = recognize(
-        tuple((
-            int_str,
-            opt(dot_fraction),
-            opt(e_exponent),
-        ))
-    );
-    map_res(f, |s| {
-        // Oops; by using recognize we lost track of whether there was a
-        // fraction or exponent present.  Search the string again for a
-        // '.' or 'e' to re-establish whether we're parsing an integer
-        // or a float.
-        let dot_or_e = s.find(|c: char| c == '.' || c == 'e');
-        match dot_or_e {
-            Some(_) => parse_float(s),
-            None => parse_int(s),
+    let f = tuple((int, opt(dot_fraction), opt(e_exponent)));
+    // We're being a little sneaky here.  Instead of using `map_res`, we
+    // run the parser by hand so we can see both its output and the input
+    // remainder.  This allows us to keep all the detail from the integer
+    // parsing (i.e. RawInt), while also computing the consumed slice
+    // like nom's `recognize` for parse_float.
+    match f(input) {
+        Ok((remainder, (firstint, frac, exp))) => {
+            let index = offset(input, remainder);
+            let recognized = &input[..index];
+            // If we picked up a '.' or 'e' we are parsing a float; if neither we
+            // are parsing an integer.
+            let dot_or_e = frac.is_some() || exp.is_some();
+            if dot_or_e {
+                Ok((remainder, parse_float(recognized).map_err(nom::Err::Error)?))
+            } else {
+                Ok((remainder, parse_int(firstint).map_err(nom::Err::Error)?))
+            }
         }
-    })
-    (input)
+        Err(e) => Err(e),
+    }
 }
 
 #[test]
@@ -337,6 +432,19 @@ fn test_float_or_int() {
     assert_eq!(float_or_int("1e"), Ok(("e", Value::Uint(1))));
     assert_eq!(float_or_int("1."), Ok((".", Value::Uint(1))));
     assert!(float_or_int("abc").is_err());
+
+    assert_eq!(float_or_int("0x100"), Ok(("", Value::Uint(256))));
+    assert_eq!(float_or_int("0b101"), Ok(("", Value::Uint(5))));
+    // We're not supposed to parse leading zeros.
+    assert_eq!(float_or_int("00"), Ok(("0", Value::Uint(0))));
+
+    assert_eq!(float_or_int("-0x100"), Ok(("", Value::Nint(-256))));
+    assert_eq!(float_or_int("-0b101"), Ok(("", Value::Nint(-5))));
+
+    // While this is allowed in the CDDL grammar, it doesn't make logical sense
+    // so we want to return an error.
+    assert!(float_or_int("0b1e99").is_err());
+    assert!(float_or_int("0b1.1").is_err());
 }
 
 // bytes = [bsqual] %x27 *BCHAR %x27
@@ -707,9 +815,9 @@ fn test_grpent_val() {
 #[rustfmt::skip]
 fn occur_star(input: &str) -> JResult<&str, Occur> {
     let f = tuple((
-        opt(uint),
+        opt(uint_u64),
         tag("*"),
-        opt(uint),
+        opt(uint_u64),
     ));
     // FIXME: it's really not the parser's business to be inventing an upper
     // limit here.  Plus, the use of usize::MAX is kind of gross.
@@ -751,6 +859,7 @@ fn test_occur() {
     assert_eq!(occur("*9"), Ok(("", Occur::Numbered(0, 9))));
     assert_eq!(occur("7*"), Ok(("", Occur::Numbered(7, std::usize::MAX))));
     assert_eq!(occur("7*9"), Ok(("", Occur::Numbered(7, 9))));
+    assert_eq!(occur("0b100*0x10"), Ok(("", Occur::Numbered(4, 16))));
 }
 
 // grpent = [occur S] [memberkey S] type
@@ -986,6 +1095,13 @@ fn test_type1() {
     assert_eq!(
         result,
         r#"Ok(("", Range(TypeRange { start: Value(Uint(1)), end: Value(Uint(9)), inclusive: true })))"#
+    );
+
+    let result = type1("0x10 .. 0x1C");
+    let result = format!("{:?}", result);
+    assert_eq!(
+        result,
+        r#"Ok(("", Range(TypeRange { start: Value(Uint(16)), end: Value(Uint(28)), inclusive: true })))"#
     );
 
     let result = type1("1 ... 9");
