@@ -249,3 +249,15 @@ pub struct Cddl {
     /// Rules and their syntax trees.
     pub rules: Vec<Rule>,
 }
+
+/// A CDDL specification, containing multiple rule syntax trees.
+///
+/// This is the output from the parser for a given CDDL text input.
+/// CddlSlice is exactly the same as [`Cddl`] except that it also
+/// preserves a copy of the string used to compose that rule.
+///
+#[derive(Debug, PartialEq)]
+pub struct CddlSlice {
+    /// Rules and their syntax trees.
+    pub rules: Vec<(Rule, String)>,
+}

@@ -9,7 +9,7 @@
 
 use crate::ast;
 use crate::ivt::*;
-use crate::parser::parse_cddl;
+use crate::parser::{parse_cddl, slice_parse_cddl};
 use crate::util::ValidateError;
 use std::collections::BTreeMap;
 use std::convert::TryInto;
@@ -17,19 +17,40 @@ use std::convert::TryInto;
 // The type used to return a {name: rule} tree
 type RulesByName = BTreeMap<String, Node>;
 
+type RulesWithStrings = BTreeMap<String, (Node, String)>;
+
 /// The result of a flatten operation.
 pub type FlattenResult<T> = std::result::Result<T, ValidateError>;
 
-/// Convert a CDDL schema in UTF-8 form into a (name, rule) map.
+/// Convert a CDDL schema in UTF-8 form into a `(name, rule)` map.
 pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
     let cddl = parse_cddl(cddl_input).map_err(ValidateError::ParseError)?;
     flatten(&cddl)
 }
 
-/// Convert an already-parsed cddl AST into a (name, rules) map.
+/// Convert a CDDL schema in UTF-8 form into a `(name, (rules, rule-string))` map.
+pub fn slice_flatten_from_str(cddl_input: &str) -> FlattenResult<RulesWithStrings> {
+    let cddl = slice_parse_cddl(cddl_input).map_err(ValidateError::ParseError)?;
+    slice_flatten(&cddl)
+}
+
+/// Convert an already-parsed cddl AST into a `(name, rules)` map.
 pub fn flatten(cddl: &ast::Cddl) -> FlattenResult<RulesByName> {
     // This first pass generates a tree of Nodes from the AST.
     cddl.rules.iter().map(|rule| flatten_rule(rule)).collect()
+}
+
+/// Convert an already-parsed cddl AST into a `(name, (rules, rule-string))` map.
+pub fn slice_flatten(cddl: &ast::CddlSlice) -> FlattenResult<RulesWithStrings> {
+    // This first pass generates a tree of Nodes from the AST.
+    cddl.rules
+        .iter()
+        .map(|(rule, s)| {
+            let (name, flat) = flatten_rule(rule)?;
+            // key = name, value = (Node, copy of cddl text slice)
+            Ok((name, (flat, s.clone())))
+        })
+        .collect()
 }
 
 /// flatten an ast::Rule to an ivt::Node

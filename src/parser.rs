@@ -395,31 +395,45 @@ fn offset(whole: &str, part: &str) -> usize {
     part.as_ptr() as usize - whole.as_ptr() as usize
 }
 
+// This is similar to nom's `recognize` function.
+// The difference is that it doesn't throw away the inner parser's result;
+// it returns a tuple (slice, result) so you can have both.
+fn recognizer<'a, O, E, F>(parser: F) -> impl Fn(&'a str) -> nom::IResult<&'a str, (&'a str, O), E>
+where
+    E: nom::error::ParseError<&'a str>,
+    F: Fn(&'a str) -> nom::IResult<&'a str, O, E>,
+{
+    move |input: &'a str| {
+        #[allow(clippy::clone_double_ref)]
+        let i = input.clone();
+        match parser(i) {
+            Ok((i, output)) => {
+                let index = offset(input, &i);
+                let output_slice = &input[..index];
+                let output_tuple = (output_slice, output);
+                Ok((i, output_tuple))
+            }
+            Err(e) => Err(e),
+        }
+    }
+}
+
 // int ["." fraction] ["e" exponent ]
 // (must have at least one of the latter two to be a float)
-//#[rustfmt::skip]
 fn float_or_int(input: &str) -> JResult<&str, Value> {
-    let f = tuple((int, opt(dot_fraction), opt(e_exponent)));
-    // We're being a little sneaky here.  Instead of using `map_res`, we
-    // run the parser by hand so we can see both its output and the input
-    // remainder.  This allows us to keep all the detail from the integer
-    // parsing (i.e. RawInt), while also computing the consumed slice
-    // like nom's `recognize` for parse_float.
-    match f(input) {
-        Ok((remainder, (firstint, frac, exp))) => {
-            let index = offset(input, remainder);
-            let recognized = &input[..index];
-            // If we picked up a '.' or 'e' we are parsing a float; if neither we
-            // are parsing an integer.
-            let dot_or_e = frac.is_some() || exp.is_some();
-            if dot_or_e {
-                Ok((remainder, parse_float(recognized).map_err(nom::Err::Error)?))
-            } else {
-                Ok((remainder, parse_int(firstint).map_err(nom::Err::Error)?))
-            }
+    let f = recognizer(tuple((int, opt(dot_fraction), opt(e_exponent))));
+    map_res(f, |(recognized, output)| {
+        let (firstint, frac, exp) = output;
+
+        // If we picked up a '.' or 'e' we are parsing a float; if neither we
+        // are parsing an integer.
+        let dot_or_e = frac.is_some() || exp.is_some();
+        if dot_or_e {
+            parse_float(recognized)
+        } else {
+            parse_int(firstint)
         }
-        Err(e) => Err(e),
-    }
+    })(input)
 }
 
 #[test]
@@ -1192,6 +1206,22 @@ fn cddl(input: &str) -> JResult<&str, Cddl> {
     (input)
 }
 
+#[rustfmt::skip]
+fn cddl_slice(input: &str) -> JResult<&str, CddlSlice> {
+    let f = preceded(ws,
+        many1(
+            terminated(
+                map(recognizer(rule), |(s, r)| {
+                    (r, s.to_string())
+                }),
+                ws
+            )
+        )
+    );
+    map(f, |r| CddlSlice{rules: r})
+    (input)
+}
+
 /// The main entry point for parsing CDDL text.
 ///
 /// If successful, it will return a [`Cddl`] instance containing all the rules
@@ -1207,6 +1237,15 @@ fn cddl(input: &str) -> JResult<&str, Cddl> {
 ///
 pub fn parse_cddl(input: &str) -> Result<Cddl, ParseError> {
     let result = all_consuming(cddl)(input)?;
+    Ok(result.1)
+}
+
+/// An entry point for parsing CDDL text, preserving rule strings
+///
+/// This operates exactly like [`parse_cddl`], but stores a copy of the rule's
+/// original CDDL text.
+pub fn slice_parse_cddl(input: &str) -> Result<CddlSlice, ParseError> {
+    let result = all_consuming(cddl_slice)(input)?;
     Ok(result.1)
 }
 
@@ -1245,6 +1284,13 @@ fn test_cddl() {
         result,
         r#"Ok(Cddl { rules: [Rule { name: "foo", val: AssignType(Type([Simple(Map(Group([GrpChoice([GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Value(Text("a")), cut: true }), value: Type([Simple(Typename("bar"))]) }) }, GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Type1(Simple(Typename("b"))), cut: false }), value: Type([Simple(Typename("baz"))]) }) }])])))])) }] })"#
     );
+}
+
+#[test]
+fn test_cddl_slice() {
+    let result = slice_parse_cddl(" foo = { a: tstr } bar = \n[ int ] ").unwrap();
+    assert_eq!(result.rules[0].1, "foo = { a: tstr }");
+    assert_eq!(result.rules[1].1, "bar = \n[ int ]");
 }
 
 // FIXME: these are things I discovered while validating cbor.  Move them to their own tests?
