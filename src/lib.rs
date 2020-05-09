@@ -121,6 +121,7 @@
 
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
+#![warn(clippy::cast_possible_truncation)]
 
 pub mod ast;
 pub mod context;

@@ -36,9 +36,9 @@ impl TryFrom<&JSON_Value> for Value {
             JSON_Value::Bool(b) => Value::Bool(*b),
             JSON_Value::Number(num) => {
                 if let Some(u) = num.as_u64() {
-                    Value::Integer(u as i128)
+                    Value::Integer(i128::from(u))
                 } else if let Some(i) = num.as_i64() {
-                    Value::Integer(i as i128)
+                    Value::Integer(i128::from(i))
                 } else if let Some(f) = num.as_f64() {
                     Value::from_float(f)
                 } else {

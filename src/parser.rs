@@ -382,7 +382,7 @@ fn parse_int(raw: RawInt) -> Result<Value, ParseError> {
     if raw.neg {
         // i64 has a larger positive range than negative range, so if we
         // survive the conversion to i64 then unary `-` must succeed.
-        let negint = i64::try_from(posint).map_err(|_| parse_error(MalformedInteger, raw.slice))?;
+        let negint: i64 = try_into_int(posint, raw.slice)?;
         Ok(Value::Nint(-negint))
     } else {
         Ok(Value::Uint(posint))
@@ -823,6 +823,15 @@ fn test_grpent_val() {
     );
 }
 
+// A helper function that does u64->usize conversion, returning
+// ParseError(MalformedInteger) on failure.
+fn try_into_int<T, U>(x: T, source: &str) -> Result<U, ParseError>
+where
+    U: TryFrom<T>,
+{
+    <U>::try_from(x).map_err(|_| parse_error(MalformedInteger, source))
+}
+
 // occur = [uint] "*" [uint]
 //       / "+"
 //       / "?"
@@ -837,19 +846,19 @@ fn occur_star(input: &str) -> JResult<&str, Occur> {
     // limit here.  Plus, the use of usize::MAX is kind of gross.
     // The parser should leave these as Option and leave it to others to
     // decide what to do with that.
-    map(f, |tup| {
+    map_res(f, |tup| -> Result<Occur, ParseError> {
         if tup.0.is_none() && tup.2.is_none() {
-            Occur::ZeroOrMore
+            Ok(Occur::ZeroOrMore)
         } else {
             let lower: usize = match tup.0 {
-                Some(n) => n as usize,
+                Some(n) => try_into_int(n, input)?,
                 None => 0,
             };
             let upper: usize = match tup.2 {
-                Some(n) => n as usize,
+                Some(n) => try_into_int(n, input)?,
                 None => std::usize::MAX,
             };
-            Occur::Numbered(lower, upper)
+            Ok(Occur::Numbered(lower, upper))
         }
     })
     (input)
