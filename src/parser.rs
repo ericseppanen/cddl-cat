@@ -114,6 +114,25 @@ impl<I: Into<String>> nom::error::ParseError<I> for ParseError {
     }
 }
 
+// A workaround for the fact that nom::combinator::map_res discards the returned error type.
+// See also https://github.com/Geal/nom/issues/1171
+fn map_res_fail<I: Clone, O1, O2, E: nom::error::ParseError<I>, F, G>(
+    first: F,
+    second: G,
+) -> impl Fn(I) -> nom::IResult<I, O2, E>
+where
+    F: Fn(I) -> nom::IResult<I, O1, E>,
+    G: Fn(O1) -> Result<O2, E>,
+{
+    move |input: I| {
+        let (input, o1) = first(input)?;
+        match second(o1) {
+            Ok(o2) => Ok((input, o2)),
+            Err(e) => Err(nom::Err::Failure(e)),
+        }
+    }
+}
+
 // CDDL whitespace definition:
 // Note no support for tabs, or naked linefeed characters.
 //
@@ -290,7 +309,7 @@ fn uint(input: &str) -> JResult<&str, RawUint> {
 // Extract an unsigned integer using the correct base (radix).
 #[rustfmt::skip]
 fn uint_u64(input: &str) -> JResult<&str, u64> {
-    map_res(uint, |raw| {
+    map_res_fail(uint, |raw| {
         u64::from_str_radix(raw.slice, raw.base)
         .map_err(|_| {
             parse_error(MalformedInteger, raw.slice)
@@ -422,7 +441,7 @@ where
 // (must have at least one of the latter two to be a float)
 fn float_or_int(input: &str) -> JResult<&str, Value> {
     let f = recognizer(tuple((int, opt(dot_fraction), opt(e_exponent))));
-    map_res(f, |(recognized, output)| {
+    map_res_fail(f, |(recognized, output)| {
         let (firstint, frac, exp) = output;
 
         // If we picked up a '.' or 'e' we are parsing a float; if neither we
@@ -538,7 +557,7 @@ fn parse_hex(s: &str) -> Result<Vec<u8>, ParseError> {
 fn bytestring(input: &str) -> JResult<&str, Vec<u8>> {
     alt((
         map(bytestring_utf8, |s| s.as_bytes().into()),
-        map_res(bytestring_hex, |s| parse_hex(s)),
+        map_res_fail(bytestring_hex, |s| parse_hex(s)),
         map(bytestring_base64, |s| s.as_bytes().into()), // FIXME: base64 decode here!
     ))
     (input)
@@ -613,7 +632,7 @@ fn text_literal(input: &str) -> JResult<&str, String> {
         charx('"')
     );
 
-    map_res(f, |s| {
+    map_res_fail(f, |s| {
         unescape(s).map_err(|_| parse_error(MalformedText, s) )
     })
     (input)
@@ -1322,4 +1341,16 @@ fn test_stuff() {
         )"#,
     )
     .unwrap();
+}
+
+#[test]
+fn test_errors() {
+    let err = parse_cddl("x=9999999999999999999999999999999").unwrap_err();
+    assert_eq!(err.kind, MalformedInteger);
+
+    let err = parse_cddl(r#"x="\ud800""#).unwrap_err();
+    assert_eq!(err.kind, MalformedText);
+
+    let err = parse_cddl("x=h'61 62 6'").unwrap_err();
+    assert_eq!(err.kind, MalformedHex);
 }
