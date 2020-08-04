@@ -38,32 +38,27 @@ against a CDDL schema description.
 This example validates JSON-encoded data against a CDDL schema:
 
 ```rust
-# #[cfg(feature = "serde_json")]
 use cddl_cat::validate_json_str;
 
 let cddl_input = "person = {name: tstr, age: int}";
 let json_str = r#"{ "name": "Bob", "age": 43 }"#;
 
-# #[cfg(feature = "serde_json")]
 validate_json_str("person", cddl_input, &json_str).unwrap();
 ```
 
 If the JSON data doesn't have the expected structure, an error will
 result:
 ```rust
-# #[cfg(feature = "serde_json")]
 use cddl_cat::validate_json_str;
 
 let cddl_input = "person = {name: tstr, age: int}";
 let json_str = r#"{ "name": "Bob", "age": "forty three" }"#;
 
-# #[cfg(feature = "serde_json")]
 assert!(validate_json_str("person", cddl_input, &json_str).is_err());
 ```
 
 A similar example, verifying CBOR-encoded data against a CDDL schema:
 ```rust
-# #[cfg(feature = "serde_cbor")]
 use cddl_cat::validate_cbor_bytes;
 use serde::Serialize;
 
@@ -77,10 +72,8 @@ let input = PersonStruct {
     name: "Bob".to_string(),
     age: 43,
 };
-# #[cfg(feature = "serde_cbor")]
 let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
 let cddl_input = "person = {name: tstr, age: int}";
-# #[cfg(feature = "serde_cbor")]
 validate_cbor_bytes("person", cddl_input, &cbor_bytes).unwrap();
 ```
 
