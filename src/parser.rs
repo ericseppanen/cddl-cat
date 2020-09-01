@@ -684,98 +684,141 @@ fn test_value() {
     assert!(value("abc").is_err());
 }
 
+// Match the ": Y" part of an "X : Y" memberkey.
+#[rustfmt::skip]
+fn grpent_memberkey_tail(input: &str) -> JResult<&str, Type> {
+    preceded(
+        pair(
+            tag(":"),
+            ws,
+        ),
+        ty,
+    )(input)
+}
+
+// A helper function for grpent_member for assembling the Member
+// from the key and value when using the "X:Y" syntax.
+//
+// The key must be a Type2::Value or Type2::Typename or this function
+// will panic.
+fn assemble_basic_member(key: Type1, value: Type) -> Member {
+    let member_key = match key {
+        Type1::Simple(Type2::Value(v)) => MemberKeyVal::Value(v),
+        Type1::Simple(Type2::Typename(s)) => MemberKeyVal::Bareword(s),
+        _ => panic!("assemble_basic_member wrong key type"),
+    };
+    Member {
+        key: Some(MemberKey {
+            val: member_key,
+            cut: true,
+        }),
+        value,
+    }
+}
+
+// grpent = [occur S] [memberkey S] type
+//        / [occur S] groupname [genericarg]  ; preempted by above
+//        / [occur S] "(" S group S ")"
+//
 // memberkey = type1 S ["^" S] "=>"
 //           / bareword S ":"
 //           / value S ":"
-
-#[rustfmt::skip]
-fn memberkey_type1(input: &str) -> JResult<&str, MemberKey> {
-    let f = tuple((
-        terminated(type1, ws),
-        opt(terminated(tag("^"), ws)),
-        tag("=>")
-    ));
-    map(f, |(ty1, cut, _)| MemberKey{
-        val: MemberKeyVal::Type1(ty1),
-        cut: cut.is_some(),
-    })
-    (input)
-}
-
-#[test]
-fn test_memberkey_type1() {
-    let result = memberkey_type1("a => b");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok((" b", MemberKey { val: Type1(Simple(Typename("a"))), cut: false }))"#
-    );
-
-    let result = memberkey_type1("a ^ => b");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok((" b", MemberKey { val: Type1(Simple(Typename("a"))), cut: true }))"#
-    );
-}
-
-#[rustfmt::skip]
-fn memberkey_bareword(input: &str) -> JResult<&str, MemberKey> {
-    let f = separated_pair(
-        ident,
-        ws,
-        tag(":")
-    );
-    map(f, |(id, _)| MemberKey{
-        val: MemberKeyVal::Bareword(id.into()),
-        cut: true,
-    })
-    (input)
-}
-
-#[test]
-fn test_memberkey_bareword() {
-    let result = memberkey_bareword("a:b");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("b", MemberKey { val: Bareword("a"), cut: true }))"#
-    );
-}
-
-#[rustfmt::skip]
-fn memberkey_value(input: &str) -> JResult<&str, MemberKey> {
-    let f = separated_pair(
-        value,
-        ws,
-        tag(":")
-    );
-    map(f, |(val, _)| MemberKey{
-        val: MemberKeyVal::Value(val),
-        cut: true,
-    })
-    (input)
-}
-
-#[rustfmt::skip]
-fn memberkey(input: &str) -> JResult<&str, MemberKey> {
-    alt((
-        memberkey_type1,
-        memberkey_bareword,
-        memberkey_value
-    ))
-    (input)
-}
-
-// [memberkey S] type
+//
+// Parsing the memberkey syntax is tricky, because it's easy to fall into
+// 2^N iterations due to backtracking.
+//
+// The problem arises when we see something like "[[[[ int ]]]]".
+// If we first search for a memberkey, we can go on an adventure trying
+// many different partial matches of the first memberkey type
+// ( type1 S ["^" S] "=>" ) before discarding that work because there is
+// no trailing "=>".
+//
+// The root problem is that "int" will match both the with-memberkey and
+// without-memberkey grammars, because it's both a type and a type1.
+// if we start wrapping it in N sets of array-brackets or map-brackets,
+// there are 2^N possible ways for that type1 to be parsed before we
+// discover the missing "=>".
+//
+// The solution is to change the parser to match this equivalent grammar:
+//
+// grpent = [occur S] member_type1
+//        / [occur S] groupname [genericarg]  ; preempted by above
+//        / [occur S] "(" S group S ")"
+//
+// member_type1 = bareword S ":" type
+//              / value S ":" type
+//              / type1 S ["^" S] "=>" type
+//
+// In this grammar, it's easier to see that the bareword and value nodes
+// also match the type1 node.  We avoid backtracking by matching the
+// type1 node first, and then peeking at which variant it is to see if
+// the ":" syntax is allowed.  If it's an id (bareword) or value, then
+// we attempt to match that syntax before trying the others.
+//
 #[rustfmt::skip]
 fn grpent_member(input: &str) -> JResult<&str, Member> {
-    let f = pair(
-        terminated(opt(memberkey), ws),
-        ty
-    );
-    map(f, |(key, value)| Member{ key, value } )
-    (input)
+
+    // The leading Type1 is required for this parser.
+    let (input, first_type1) = terminated(type1, ws)(input)?;
+
+    // If the type1 matches is a plain value or typename (aka id), then we may
+    // be looking at a memberkey followed by a ":".  That syntax isn't allowed
+    // for other Type1 patterns.
+
+    match first_type1 {
+        Type1::Simple(Type2::Value(_)) |
+        Type1::Simple(Type2::Typename(_)) => {
+            // Next, try to match ":" ws ty
+            if let Ok((input, tail_type)) = grpent_memberkey_tail(input) {
+                let member = assemble_basic_member(first_type1, tail_type);
+                return Ok((input, member));
+            }
+        }
+        // "X:Y" isn't allowed when X is some other Type1 variant.
+        _ => {}
+    }
+
+    // grpent with memberkey followed by "=>" (with optional cut symbol "^")
+    // should return a Member, with key: Some(MemberKey{val, cut})
+    // and value: Type
+
+    if let Ok((input, matched_tuple)) = tuple((
+        opt(terminated(tag("^"), ws)),
+        tag("=>"),
+        ws,
+        ty,
+    ))(input) {
+        let (cut, _, _, val) = matched_tuple;
+        let member = Member {
+            key: Some(MemberKey {
+                val: MemberKeyVal::Type1(first_type1),
+                cut: cut.is_some(),
+            }),
+            value: val,
+        };
+        return Ok((input, member));
+    }
+
+    // grpent without memberkey
+    // should return a Member, with key: None and value: Type containing Vec<Type1>
+    // This is a lot like the fn `ty` but we will concatenate this with first_type1
+
+    if let Ok((input, mut ty1s)) = many0(
+        preceded(
+            delimited(ws, tag("/"), ws),
+            type1
+        )
+    )(input) {
+        // insert the first type1 (from the top of this function)
+        ty1s.insert(0, first_type1);
+        let member = Member {
+            key: None,
+            value: Type(ty1s),
+        };
+        return Ok((input, member));
+    }
+
+    Err(nom::Err::Error(parse_error(Unparseable, "grpent_member")))
 }
 
 #[test]
@@ -792,6 +835,19 @@ fn test_member() {
     assert_eq!(
         result,
         r#"Ok(("", Member { key: None, value: Type([Simple(Typename("foo"))]) }))"#
+    );
+    let result = grpent_member("a => b");
+    let result = format!("{:?}", result);
+    assert_eq!(
+        result,
+        r#"Ok(("", Member { key: Some(MemberKey { val: Type1(Simple(Typename("a"))), cut: false }), value: Type([Simple(Typename("b"))]) }))"#
+    );
+
+    let result = grpent_member("42 ^ => b");
+    let result = format!("{:?}", result);
+    assert_eq!(
+        result,
+        r#"Ok(("", Member { key: Some(MemberKey { val: Type1(Simple(Value(Uint(42)))), cut: true }), value: Type([Simple(Typename("b"))]) }))"#
     );
 }
 
