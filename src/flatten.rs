@@ -28,7 +28,10 @@ pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
     flatten(&cddl)
 }
 
-/// Convert a CDDL schema in UTF-8 form into a `(name, (rules, rule-string))` map.
+/// Convert a CDDL schema in UTF-8 form into a `(name, (rule, rule-string))` map.
+///
+/// This works the same as `flatten_from_str`, but preserves a copy of the original
+/// CDDL text alongside the IVT.
 pub fn slice_flatten_from_str(cddl_input: &str) -> FlattenResult<RulesWithStrings> {
     let cddl = slice_parse_cddl(cddl_input).map_err(ValidateError::ParseError)?;
     slice_flatten(&cddl)
@@ -40,7 +43,10 @@ pub fn flatten(cddl: &ast::Cddl) -> FlattenResult<RulesByName> {
     cddl.rules.iter().map(|rule| flatten_rule(rule)).collect()
 }
 
-/// Convert an already-parsed cddl AST into a `(name, (rules, rule-string))` map.
+/// Convert an already-parsed cddl AST into a `(name, (rule, rule-string))` map.
+///
+/// This works the same as `flatten`, but preserves a copy of the original
+/// CDDL text alongside the IVT.
 pub fn slice_flatten(cddl: &ast::CddlSlice) -> FlattenResult<RulesWithStrings> {
     // This first pass generates a tree of Nodes from the AST.
     cddl.rules

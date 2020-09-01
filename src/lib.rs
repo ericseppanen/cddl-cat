@@ -1,9 +1,6 @@
 //! `cddl-cat` is a library for validating encoded data against a CDDL
 //! document that describes the expected structure of the data.
 //!
-//! **Note:** This library is fairly new, and may still contain significant
-//! bugs, ommissions, or unstable interfaces.
-//!
 //! CDDL is a text document described by [RFC8610] that describes data
 //! structures.  CDDL is not tied to any specific serialization or encoding
 //! method; it can be used to validate data that is in [CBOR] or JSON format.

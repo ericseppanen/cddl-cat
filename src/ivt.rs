@@ -305,6 +305,13 @@ pub struct Array {
     pub members: Vec<Node>,
 }
 
+/// A range of numbers.
+///
+/// Ranges can be defined as inclusive (`..`) or exclusive (`...`).
+///
+/// CDDL only defines ranges between two integers or between two floating
+/// point values.  A lower bound that exceeds the upper bound is valid CDDL,
+/// but behaves as an empty set.
 #[derive(Debug, Clone)]
 #[allow(missing_docs)]
 pub struct Range {
