@@ -586,7 +586,7 @@ fn test_bytestring() {
 fn is_unescaped_schar(c: char) -> bool {
     let ranges = [
         (0x20 ..= 0x21),
-        (0x23 ..= 0x58),
+        (0x23 ..= 0x5B),
         (0x5D ..= 0x7E),
         (0x80 ..= 0x10FFD),
     ];
