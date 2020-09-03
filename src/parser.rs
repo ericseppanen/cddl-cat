@@ -15,10 +15,9 @@ use crate::ast::*;
 use escape8259::unescape;
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_while, take_while1},
+    bytes::complete::{tag, take_while1},
     character::complete::{
-        alpha0, anychar, char as charx, digit0, digit1, hex_digit1, multispace1, not_line_ending,
-        one_of,
+        anychar, char as charx, digit0, digit1, hex_digit1, multispace1, not_line_ending, one_of,
     },
     combinator::{all_consuming, map, map_res, opt, recognize, value as valuex},
     multi::{many0, many1, separated_nonempty_list},
@@ -52,6 +51,8 @@ pub enum ErrorKind {
     MalformedHex,
     /// A malformed text string
     MalformedText,
+    /// A malformed base64 byte string
+    MalformedBase64,
     /// A nonspecific parsing error.
     Unparseable,
 }
@@ -492,53 +493,74 @@ fn test_float_or_int() {
 // See the RFC for details.
 
 #[rustfmt::skip]
-fn bytestring_utf8(input: &str) -> JResult<&str, &str> {
-    delimited(
-        charx('\''),
-        alpha0, // FIXME: replace with BCHAR
-        charx('\'')
-    )(input)
-}
-
-#[rustfmt::skip]
-fn bytestring_hex(input: &str) -> JResult<&str, &str> {
-    delimited(
-        tag("h'"),
-        recognize(
-            pair(
-                ws,
-                many0(terminated(hex_digit1, ws)),
-            )
-        ),
-        charx('\'')
-    )(input)
-}
-
-#[rustfmt::skip]
-fn is_base64_char(c: char) -> bool {
+fn is_unescaped_bchar(c: char) -> bool {
     let ranges = [
-        (0x30 ..= 0x39), // 0-9
-        (0x41 ..= 0x5A), // A-Z
-        (0x61 ..= 0x7A), // a-z
+        (0x20 ..= 0x26),
+        (0x28 ..= 0x5B),
+        (0x5D ..= 0x7E),
+        (0x80 ..= 0x10FFD),
     ];
     let cv = c as u32;
 
     ranges.iter().any(|range| range.contains(&cv))
-    || c == '+' || c == '/' || c == '='
 }
 
-// Zero or more base64 characters
+// One or more unescaped byte-string characters
 #[rustfmt::skip]
-fn base64(input: &str) -> JResult<&str, &str> {
-    take_while(is_base64_char)
+fn unescaped_bchar(input: &str) -> JResult<&str, &str> {
+    take_while1(is_unescaped_bchar)
     (input)
 }
 
+// FIXME: should also permit included CRLF
+// Zero or more byte-string characters
+#[rustfmt::skip]
+fn bchar(input: &str) -> JResult<&str, &str> {
+    recognize(
+        many0(
+            alt((
+                unescaped_bchar,
+                sesc
+            ))
+        )
+    )
+    (input)
+}
+
+// This is basically identical to `text_literal` except that
+// it uses single-quotes.
+#[rustfmt::skip]
+fn bytestring_utf8(input: &str) -> JResult<&str, String> {
+    let f = delimited(
+        tag("'"),
+        bchar,
+        tag("'")
+    );
+
+    map_res_fail(f, |s| {
+        unescape(s).map_err(|_| parse_error(MalformedText, s) )
+    })
+    (input)
+}
+
+// This doesn't check that only the right characters are used;
+// that will be done later during parsing of the string.
+#[rustfmt::skip]
+fn bytestring_hex(input: &str) -> JResult<&str, &str> {
+    delimited(
+        tag("h'"),
+        bchar,
+        tag("\'")
+    )(input)
+}
+
+// This doesn't check that only the right characters are used;
+// that will be done later during parsing of the string.
 #[rustfmt::skip]
 fn bytestring_base64(input: &str) -> JResult<&str, &str> {
     delimited(
         tag("b64'"),
-        base64,
+        bchar,
         charx('\'')
     )(input)
 }
@@ -558,7 +580,11 @@ fn bytestring(input: &str) -> JResult<&str, Vec<u8>> {
     alt((
         map(bytestring_utf8, |s| s.as_bytes().into()),
         map_res_fail(bytestring_hex, |s| parse_hex(s)),
-        map(bytestring_base64, |s| s.as_bytes().into()), // FIXME: base64 decode here!
+        map_res_fail(bytestring_base64, |s| {
+            base64::decode_config(s, base64::URL_SAFE).map_err(|_| {
+                parse_error(MalformedBase64, s)
+            })
+        }),
     ))
     (input)
 }
@@ -571,11 +597,54 @@ fn test_bytestring() {
 
     // Same thing, in hex format
     assert_eq!(result1, bytestring("h'61 62 63'"));
+    assert_eq!(result1, bytestring("h' 6 1626 3  '"));
 
     // Same thing, in base64 format
-    //assert_eq!(result1, bytestring("b64'YWJj'"));
+    assert_eq!(result1, bytestring("b64'YWJj'"));
 
-    // FIXME: test invalid strings
+    // bytestring in UTF-8 with escapes
+    assert_eq!(bytestring(r#"'a\nb'"#), Ok(("", "a\nb".into())));
+    assert_eq!(bytestring(r#"'\uD834\uDD1E'"#), Ok(("", "𝄞".into())));
+
+    // Non-text bytes
+    let result2 = vec![0u8, 0xFF, 1, 0x7F];
+    assert_eq!(Ok(("", result2.clone())), bytestring("h'00FF017f'"));
+    assert_eq!(Ok(("", result2.clone())), bytestring("b64'AP8Bfw=='"));
+
+    // Empty inputs
+    assert_eq!(Ok(("", vec![])), bytestring("h''"));
+    assert_eq!(Ok(("", vec![])), bytestring("b64''"));
+
+    fn fail_kind(e: nom::Err<ParseError>) -> ErrorKind {
+        match e {
+            nom::Err::Failure(e) => e.kind,
+            _ => panic!("expected nom::err::Failure, got {:?}", e),
+        }
+    }
+
+    // Bad hex character
+    assert_eq!(
+        fail_kind(bytestring("h'0g1234'").unwrap_err()),
+        ErrorKind::MalformedHex
+    );
+
+    // Bad base64 character "!"
+    assert_eq!(
+        fail_kind(bytestring("b64'AP!Bfw=='").unwrap_err()),
+        ErrorKind::MalformedBase64
+    );
+
+    // wrong flavor of base64: CDDL requires the "base64url" encoding.
+    assert_eq!(
+        // base64 encoding of FBEF00 using the wrong encoder.
+        fail_kind(bytestring("b64'++8A'").unwrap_err()),
+        ErrorKind::MalformedBase64
+    );
+    assert_eq!(
+        // base64 encoding of FFFFFF using the wrong encoder.
+        fail_kind(bytestring("b64'////'").unwrap_err()),
+        ErrorKind::MalformedBase64
+    );
 }
 
 // text = %x22 *SCHAR %x22
@@ -661,6 +730,7 @@ fn test_text() {
     assert!(text_literal("\"a\nb").is_err());
     assert!(text_literal("abc").is_err());
 
+    assert_eq!(text_literal(r#""""#), Ok(("", "".into())));
     assert_eq!(text_literal(r#""a\nb""#), Ok(("", "a\nb".into())));
     assert_eq!(text_literal(r#""\uD834\uDD1E""#), Ok(("", "𝄞".into())));
     assert_eq!(text_literal(r#""の""#), Ok(("", "の".into())));
