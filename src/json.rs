@@ -69,26 +69,6 @@ impl TryFrom<&JSON_Value> for Value {
     }
 }
 
-#[test]
-fn test_json_number_behavior() {
-    // Ensures that our JSON decoder tracks number types precisely, and
-    // doesn't, say, allow floating-point values to become integers.
-    // serde_json does sometimes permit as_f64 to work on integers, which is
-    // why try_from has to test u64, then i64, then f64.
-
-    let json_value: JSON_Value = serde_json::from_str("1").unwrap();
-    assert!(json_value.as_u64().is_some());
-
-    let json_value: JSON_Value = serde_json::from_str("-1").unwrap();
-    assert!(json_value.as_u64().is_none());
-    assert!(json_value.as_i64().is_some());
-
-    let json_value: JSON_Value = serde_json::from_str("1.0").unwrap();
-    assert!(json_value.as_u64().is_none());
-    assert!(json_value.as_i64().is_none());
-    assert!(json_value.as_f64().is_some());
-}
-
 // A variant that consumes the JSON Value.
 impl TryFrom<JSON_Value> for Value {
     type Error = ValidateError;
@@ -123,4 +103,29 @@ pub fn validate_json_str(name: &str, cddl: &str, json: &str) -> ValidateResult {
     // Convert the JSON tree into a Value tree for validation
     let value = Value::try_from(json_value)?;
     validate(&value, rule_node, &ctx)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_json_number_behavior() {
+        // Ensures that our JSON decoder tracks number types precisely, and
+        // doesn't, say, allow floating-point values to become integers.
+        // serde_json does sometimes permit as_f64 to work on integers, which is
+        // why try_from has to test u64, then i64, then f64.
+
+        let json_value: JSON_Value = serde_json::from_str("1").unwrap();
+        assert!(json_value.as_u64().is_some());
+
+        let json_value: JSON_Value = serde_json::from_str("-1").unwrap();
+        assert!(json_value.as_u64().is_none());
+        assert!(json_value.as_i64().is_some());
+
+        let json_value: JSON_Value = serde_json::from_str("1.0").unwrap();
+        assert!(json_value.as_u64().is_none());
+        assert!(json_value.as_i64().is_none());
+        assert!(json_value.as_f64().is_some());
+    }
 }

@@ -377,68 +377,73 @@ fn flatten_memberkey(memberkey: &ast::MemberKey) -> FlattenResult<Node> {
     }
 }
 
-#[test]
-fn test_flatten_literal_int() {
-    let cddl_input = r#"thing = 1"#;
-    let result = flatten_from_str(cddl_input).unwrap();
-    let result = format!("{:?}", result);
-    assert_eq!(result, r#"{"thing": Literal(Int(1))}"#);
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn test_flatten_literal_tstr() {
-    let cddl_input = r#"thing = "abc""#;
-    let result = flatten_from_str(cddl_input).unwrap();
-    let result = format!("{:?}", result);
-    assert_eq!(result, r#"{"thing": Literal(Text("abc"))}"#);
-}
+    #[test]
+    fn test_flatten_literal_int() {
+        let cddl_input = r#"thing = 1"#;
+        let result = flatten_from_str(cddl_input).unwrap();
+        let result = format!("{:?}", result);
+        assert_eq!(result, r#"{"thing": Literal(Int(1))}"#);
+    }
 
-#[test]
-fn test_flatten_prelude_reference() {
-    let cddl_input = r#"thing = int"#;
-    let result = flatten_from_str(cddl_input).unwrap();
-    let result = format!("{:?}", result);
-    assert_eq!(result, r#"{"thing": PreludeType(Int)}"#);
-}
+    #[test]
+    fn test_flatten_literal_tstr() {
+        let cddl_input = r#"thing = "abc""#;
+        let result = flatten_from_str(cddl_input).unwrap();
+        let result = format!("{:?}", result);
+        assert_eq!(result, r#"{"thing": Literal(Text("abc"))}"#);
+    }
 
-#[test]
-fn test_flatten_type_reference() {
-    let cddl_input = r#"thing = foo"#;
-    let result = flatten_from_str(cddl_input).unwrap();
-    let result = format!("{:?}", result);
-    assert_eq!(result, r#"{"thing": Rule(Rule { name: "foo" })}"#);
-}
+    #[test]
+    fn test_flatten_prelude_reference() {
+        let cddl_input = r#"thing = int"#;
+        let result = flatten_from_str(cddl_input).unwrap();
+        let result = format!("{:?}", result);
+        assert_eq!(result, r#"{"thing": PreludeType(Int)}"#);
+    }
 
-#[test]
-fn test_flatten_map() {
-    // A map containing a bareword key
-    let cddl_input = r#"thing = { foo: tstr }"#;
-    let result = flatten_from_str(cddl_input).unwrap();
-    let result = format!("{:?}", result);
-    let expected = concat!(
-        r#"{"thing": Map(Map { members: [KeyValue(KeyValue(Literal(Text("foo")), PreludeType(Tstr)))] })}"#
-    );
-    assert_eq!(result, expected);
+    #[test]
+    fn test_flatten_type_reference() {
+        let cddl_input = r#"thing = foo"#;
+        let result = flatten_from_str(cddl_input).unwrap();
+        let result = format!("{:?}", result);
+        assert_eq!(result, r#"{"thing": Rule(Rule { name: "foo" })}"#);
+    }
 
-    // A map containing a prelude type key.
-    // Note: CDDL syntax requires type keys to use "=>" not ":", otherwise
-    // it will assume a bareword key is being used.
-    let cddl_input = r#"thing = { tstr => tstr }"#;
-    let result = flatten_from_str(cddl_input).unwrap();
-    let result = format!("{:?}", result);
-    let expected = concat!(
-        r#"{"thing": Map(Map { members: ["#,
-        r#"KeyValue(KeyValue(PreludeType(Tstr), PreludeType(Tstr)))] })}"#
-    );
-    assert_eq!(result, expected);
+    #[test]
+    fn test_flatten_map() {
+        // A map containing a bareword key
+        let cddl_input = r#"thing = { foo: tstr }"#;
+        let result = flatten_from_str(cddl_input).unwrap();
+        let result = format!("{:?}", result);
+        let expected = concat!(
+            r#"{"thing": Map(Map { members: [KeyValue(KeyValue(Literal(Text("foo")), PreludeType(Tstr)))] })}"#
+        );
+        assert_eq!(result, expected);
 
-    // A map key name alias
-    let cddl_input = r#"foo = "bar" thing = { foo => tstr }"#;
-    let result = flatten_from_str(cddl_input).unwrap();
-    let result = format!("{:?}", result);
-    let expected = concat!(
-        r#"{"foo": Literal(Text("bar")), "thing": Map(Map { members: ["#,
-        r#"KeyValue(KeyValue(Rule(Rule { name: "foo" }), PreludeType(Tstr)))] })}"#
-    );
-    assert_eq!(result, expected);
+        // A map containing a prelude type key.
+        // Note: CDDL syntax requires type keys to use "=>" not ":", otherwise
+        // it will assume a bareword key is being used.
+        let cddl_input = r#"thing = { tstr => tstr }"#;
+        let result = flatten_from_str(cddl_input).unwrap();
+        let result = format!("{:?}", result);
+        let expected = concat!(
+            r#"{"thing": Map(Map { members: ["#,
+            r#"KeyValue(KeyValue(PreludeType(Tstr), PreludeType(Tstr)))] })}"#
+        );
+        assert_eq!(result, expected);
+
+        // A map key name alias
+        let cddl_input = r#"foo = "bar" thing = { foo => tstr }"#;
+        let result = flatten_from_str(cddl_input).unwrap();
+        let result = format!("{:?}", result);
+        let expected = concat!(
+            r#"{"foo": Literal(Text("bar")), "thing": Map(Map { members: ["#,
+            r#"KeyValue(KeyValue(Rule(Rule { name: "foo" }), PreludeType(Tstr)))] })}"#
+        );
+        assert_eq!(result, expected);
+    }
 }

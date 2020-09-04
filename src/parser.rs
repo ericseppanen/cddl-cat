@@ -171,13 +171,6 @@ fn ws(input: &str) -> JResult<&str, &str> {
     (input)
 }
 
-#[test]
-fn test_whitespace() {
-    let cddl = "  ; a comment\n        \r\n; another;;;comment\n  ";
-    let (remainder, _result) = ws(cddl).unwrap();
-    assert_eq!(remainder, "");
-}
-
 // An optional comma and any whitespace surrounding it.
 #[rustfmt::skip]
 fn optcom(input: &str) -> JResult<&str, ()> {
@@ -235,17 +228,6 @@ fn ident(input: &str) -> JResult<&str, &str> {
         )
     )
     (input)
-}
-
-#[test]
-fn test_ident() {
-    assert_eq!(ident("a"), Ok(("", "a")));
-    assert_eq!(ident("a1"), Ok(("", "a1")));
-    assert_eq!(ident("a.1"), Ok(("", "a.1")));
-    assert_eq!(ident("a1."), Ok((".", "a1")));
-    assert_eq!(ident("@a1"), Ok(("", "@a1")));
-    assert_eq!(ident("a..b"), Ok(("", "a..b")));
-    assert!(ident("1a").is_err());
 }
 
 // uint = DIGIT1 *DIGIT
@@ -317,16 +299,6 @@ fn uint_u64(input: &str) -> JResult<&str, u64> {
         })
     })
     (input)
-}
-
-#[test]
-fn test_uint() {
-    assert_eq!(uint_u64("999"), Ok(("", 999)));
-    assert_eq!(uint_u64("0"), Ok(("", 0)));
-    assert_eq!(uint_u64("0x100"), Ok(("", 256)));
-    assert_eq!(uint_u64("0b101"), Ok(("", 5)));
-    // We're not supposed to parse leading zeros.
-    assert_eq!(uint_u64("00"), Ok(("0", 0)));
 }
 
 // Like RawUint, this is a temporary representation so we can
@@ -456,31 +428,6 @@ fn float_or_int(input: &str) -> JResult<&str, Value> {
     })(input)
 }
 
-#[test]
-fn test_float_or_int() {
-    assert_eq!(float_or_int("0.0"), Ok(("", Value::Float(0.0))));
-    assert_eq!(float_or_int("1e99"), Ok(("", Value::Float(1e99))));
-    assert_eq!(float_or_int("-1e-99"), Ok(("", Value::Float(-1e-99))));
-    assert_eq!(float_or_int("123"), Ok(("", Value::Uint(123))));
-    assert_eq!(float_or_int("-123"), Ok(("", Value::Nint(-123))));
-    assert_eq!(float_or_int("1e"), Ok(("e", Value::Uint(1))));
-    assert_eq!(float_or_int("1."), Ok((".", Value::Uint(1))));
-    assert!(float_or_int("abc").is_err());
-
-    assert_eq!(float_or_int("0x100"), Ok(("", Value::Uint(256))));
-    assert_eq!(float_or_int("0b101"), Ok(("", Value::Uint(5))));
-    // We're not supposed to parse leading zeros.
-    assert_eq!(float_or_int("00"), Ok(("0", Value::Uint(0))));
-
-    assert_eq!(float_or_int("-0x100"), Ok(("", Value::Nint(-256))));
-    assert_eq!(float_or_int("-0b101"), Ok(("", Value::Nint(-5))));
-
-    // While this is allowed in the CDDL grammar, it doesn't make logical sense
-    // so we want to return an error.
-    assert!(float_or_int("0b1e99").is_err());
-    assert!(float_or_int("0b1.1").is_err());
-}
-
 // bytes = [bsqual] %x27 *BCHAR %x27
 // BCHAR = %x20-26 / %x28-5B / %x5D-10FFFD / SESC / CRLF
 // bsqual = "h" / "b64"
@@ -589,64 +536,6 @@ fn bytestring(input: &str) -> JResult<&str, Vec<u8>> {
     (input)
 }
 
-#[test]
-fn test_bytestring() {
-    let result1 = bytestring("'abc'");
-    let result = format!("{:?}", result1);
-    assert_eq!(result, r#"Ok(("", [97, 98, 99]))"#);
-
-    // Same thing, in hex format
-    assert_eq!(result1, bytestring("h'61 62 63'"));
-    assert_eq!(result1, bytestring("h' 6 1626 3  '"));
-
-    // Same thing, in base64 format
-    assert_eq!(result1, bytestring("b64'YWJj'"));
-
-    // bytestring in UTF-8 with escapes
-    assert_eq!(bytestring(r#"'a\nb'"#), Ok(("", "a\nb".into())));
-    assert_eq!(bytestring(r#"'\uD834\uDD1E'"#), Ok(("", "𝄞".into())));
-
-    // Non-text bytes
-    let result2 = vec![0u8, 0xFF, 1, 0x7F];
-    assert_eq!(Ok(("", result2.clone())), bytestring("h'00FF017f'"));
-    assert_eq!(Ok(("", result2.clone())), bytestring("b64'AP8Bfw=='"));
-
-    // Empty inputs
-    assert_eq!(Ok(("", vec![])), bytestring("h''"));
-    assert_eq!(Ok(("", vec![])), bytestring("b64''"));
-
-    fn fail_kind(e: nom::Err<ParseError>) -> ErrorKind {
-        match e {
-            nom::Err::Failure(e) => e.kind,
-            _ => panic!("expected nom::err::Failure, got {:?}", e),
-        }
-    }
-
-    // Bad hex character
-    assert_eq!(
-        fail_kind(bytestring("h'0g1234'").unwrap_err()),
-        ErrorKind::MalformedHex
-    );
-
-    // Bad base64 character "!"
-    assert_eq!(
-        fail_kind(bytestring("b64'AP!Bfw=='").unwrap_err()),
-        ErrorKind::MalformedBase64
-    );
-
-    // wrong flavor of base64: CDDL requires the "base64url" encoding.
-    assert_eq!(
-        // base64 encoding of FBEF00 using the wrong encoder.
-        fail_kind(bytestring("b64'++8A'").unwrap_err()),
-        ErrorKind::MalformedBase64
-    );
-    assert_eq!(
-        // base64 encoding of FFFFFF using the wrong encoder.
-        fail_kind(bytestring("b64'////'").unwrap_err()),
-        ErrorKind::MalformedBase64
-    );
-}
-
 // text = %x22 *SCHAR %x22
 // SCHAR = %x20-21 / %x23-5B / %x5D-7E / %x80-10FFFD / SESC
 // SESC = "\" (%x20-7E / %x80-10FFFD)
@@ -707,35 +596,6 @@ fn text_literal(input: &str) -> JResult<&str, String> {
     (input)
 }
 
-#[test]
-fn test_text() {
-    assert!(is_unescaped_schar('A'));
-    assert!(is_unescaped_schar('の'));
-    assert!(is_unescaped_schar(std::char::from_u32(0x10FF0).unwrap()));
-    assert!(!is_unescaped_schar(0x7F as char));
-
-    assert_eq!(unescaped_schar("Aの"), Ok(("", "Aの")));
-
-    assert_eq!(sesc(r#"\n"#), Ok(("", "n")));
-    assert_eq!(sesc(r#"\nn"#), Ok(("n", "n")));
-    assert_eq!(sesc(r#"\の"#), Ok(("", "の")));
-
-    // FIXME: sesc is allowing characters it shouldn't.
-    // assert_eq!(sesc("\\\x7F"), Ok(("\\\x7F", "")));
-
-    assert_eq!(schar(r#"Ab! \c の \\"#), Ok(("", r#"Ab! \c の \\"#)));
-    assert_eq!(schar(r#"a\nb"#), Ok(("", r#"a\nb"#)));
-    assert_eq!(schar("a\nb"), Ok(("\nb", "a")));
-
-    assert!(text_literal("\"a\nb").is_err());
-    assert!(text_literal("abc").is_err());
-
-    assert_eq!(text_literal(r#""""#), Ok(("", "".into())));
-    assert_eq!(text_literal(r#""a\nb""#), Ok(("", "a\nb".into())));
-    assert_eq!(text_literal(r#""\uD834\uDD1E""#), Ok(("", "𝄞".into())));
-    assert_eq!(text_literal(r#""の""#), Ok(("", "の".into())));
-}
-
 // value = number / text / bytes
 // number = hexfloat / (int ["." fraction] ["e" exponent ])
 #[rustfmt::skip]
@@ -745,13 +605,6 @@ fn value(input: &str) -> JResult<&str, Value> {
         map(text_literal, Value::Text),
         map(bytestring, Value::Bytes),
     ))(input)
-}
-
-#[test]
-fn test_value() {
-    assert_eq!(value("123"), Ok(("", Value::Uint(123))));
-    assert_eq!(value(r#""abc""#), Ok(("", Value::Text("abc".into()))));
-    assert!(value("abc").is_err());
 }
 
 // Match the ": Y" part of an "X : Y" memberkey.
@@ -891,36 +744,6 @@ fn grpent_member(input: &str) -> JResult<&str, Member> {
     Err(nom::Err::Error(parse_error(Unparseable, "grpent_member")))
 }
 
-#[test]
-fn test_member() {
-    let result = grpent_member("a:b");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", Member { key: Some(MemberKey { val: Bareword("a"), cut: true }), value: Type([Simple(Typename("b"))]) }))"#
-    );
-
-    let result = grpent_member("foo");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", Member { key: None, value: Type([Simple(Typename("foo"))]) }))"#
-    );
-    let result = grpent_member("a => b");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", Member { key: Some(MemberKey { val: Type1(Simple(Typename("a"))), cut: false }), value: Type([Simple(Typename("b"))]) }))"#
-    );
-
-    let result = grpent_member("42 ^ => b");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", Member { key: Some(MemberKey { val: Type1(Simple(Value(Uint(42)))), cut: true }), value: Type([Simple(Typename("b"))]) }))"#
-    );
-}
-
 #[rustfmt::skip]
 fn grpent_parens(input: &str) -> JResult<&str, Group> {
     delimited(
@@ -934,13 +757,6 @@ fn grpent_parens(input: &str) -> JResult<&str, Group> {
     )(input)
 }
 
-#[test]
-fn test_grpent_parens() {
-    let result = grpent_parens("()");
-    let result = format!("{:?}", result);
-    assert_eq!(result, r#"Ok(("", Group([GrpChoice([])])))"#);
-}
-
 #[rustfmt::skip]
 fn grpent_val(input: &str) -> JResult<&str, GrpEntVal> {
     alt((
@@ -949,23 +765,6 @@ fn grpent_val(input: &str) -> JResult<&str, GrpEntVal> {
         map(grpent_parens, GrpEntVal::Parenthesized),
     ))
     (input)
-}
-
-#[test]
-fn test_grpent_val() {
-    let result = grpent_val("foo");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", Member(Member { key: None, value: Type([Simple(Typename("foo"))]) })))"#
-    );
-
-    let result = grpent_val("17");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", Member(Member { key: None, value: Type([Simple(Value(Uint(17)))]) })))"#
-    );
 }
 
 // A helper function that does u64->usize conversion, returning
@@ -1019,17 +818,6 @@ fn occur(input: &str) -> JResult<&str, Occur> {
     (input)
 }
 
-#[test]
-fn test_occur() {
-    assert_eq!(occur("?"), Ok(("", Occur::Optional)));
-    assert_eq!(occur("+"), Ok(("", Occur::OneOrMore)));
-    assert_eq!(occur("*"), Ok(("", Occur::ZeroOrMore)));
-    assert_eq!(occur("*9"), Ok(("", Occur::Numbered(0, 9))));
-    assert_eq!(occur("7*"), Ok(("", Occur::Numbered(7, std::usize::MAX))));
-    assert_eq!(occur("7*9"), Ok(("", Occur::Numbered(7, 9))));
-    assert_eq!(occur("0b100*0x10"), Ok(("", Occur::Numbered(4, 16))));
-}
-
 // grpent = [occur S] [memberkey S] type
 //        / [occur S] groupname [genericarg]  ; preempted by above
 //        / [occur S] "(" S group S ")"
@@ -1044,23 +832,6 @@ fn grpent(input: &str) -> JResult<&str, GrpEnt> {
     (input)
 }
 
-#[test]
-fn test_grpent() {
-    let result = grpent("foo");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("foo"))]) }) }))"#
-    );
-
-    let result = grpent("foo: bar");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Bareword("foo"), cut: true }), value: Type([Simple(Typename("bar"))]) }) }))"#
-    );
-}
-
 // grpchoice = zero-or-more "grpent optional-comma"
 #[rustfmt::skip]
 fn grpchoice(input: &str) -> JResult<&str, GrpChoice> {
@@ -1069,13 +840,6 @@ fn grpchoice(input: &str) -> JResult<&str, GrpChoice> {
     );
     map(f, GrpChoice)
     (input)
-}
-
-#[test]
-fn test_grpchoice_empty() {
-    let result = grpchoice("");
-    let result = format!("{:?}", result);
-    assert_eq!(result, r#"Ok(("", GrpChoice([])))"#);
 }
 
 // group = grpchoice *(S "//" S grpchoice)
@@ -1107,13 +871,6 @@ fn group(input: &str) -> JResult<&str, Group> {
         gcs.append(&mut rest);
         Group(gcs)
     })(input)
-}
-
-#[test]
-fn test_group_empty() {
-    let result = group("");
-    let result = format!("{:?}", result);
-    assert_eq!(result, r#"Ok(("", Group([GrpChoice([])])))"#);
 }
 
 // "(" S type S ")"
@@ -1256,43 +1013,6 @@ fn type1(input: &str) -> JResult<&str, Type1> {
     (input)
 }
 
-#[test]
-fn test_type1() {
-    let result = type1("1 .. 9");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", Range(TypeRange { start: Value(Uint(1)), end: Value(Uint(9)), inclusive: true })))"#
-    );
-
-    let result = type1("0x10 .. 0x1C");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", Range(TypeRange { start: Value(Uint(16)), end: Value(Uint(28)), inclusive: true })))"#
-    );
-
-    let result = type1("1 ... 9");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", Range(TypeRange { start: Value(Uint(1)), end: Value(Uint(9)), inclusive: false })))"#
-    );
-
-    let result = type1("uint .size 3");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", Control(TypeControl { first: Typename("uint"), second: Value(Uint(3)), op: "size" })))"#
-    );
-
-    // RFC8610 2.2.2.1 points out that "min..max" is not a range, but an identifier
-    // (because '.' is a valid ident character).
-    let result = type2("min..max");
-    let result = format!("{:?}", result);
-    assert_eq!(result, r#"Ok(("", Typename("min..max")))"#);
-}
-
 // type = type1 [ / type1 ... ]  (skipping over type1 for now)
 #[rustfmt::skip]
 fn ty(input: &str) -> JResult<&str, Type> {
@@ -1403,80 +1123,365 @@ pub fn slice_parse_cddl(input: &str) -> Result<CddlSlice, ParseError> {
     Ok(result.1)
 }
 
-#[test]
-fn test_grpchoice() {
-    let result = grpchoice("abc");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", GrpChoice([GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("abc"))]) }) }])))"#
-    );
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let result = grpchoice("abc, def");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(("", GrpChoice([GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("abc"))]) }) }, GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("def"))]) }) }])))"#
-    );
-}
+    #[test]
+    fn test_whitespace() {
+        let cddl = "  ; a comment\n        \r\n; another;;;comment\n  ";
+        let (remainder, _result) = ws(cddl).unwrap();
+        assert_eq!(remainder, "");
+    }
 
-#[test]
-fn test_rule() {
-    let result = rule("foo=bar").unwrap().1;
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Rule { name: "foo", val: AssignType(Type([Simple(Typename("bar"))])) }"#
-    );
-}
+    #[test]
+    fn test_ident() {
+        assert_eq!(ident("a"), Ok(("", "a")));
+        assert_eq!(ident("a1"), Ok(("", "a1")));
+        assert_eq!(ident("a.1"), Ok(("", "a.1")));
+        assert_eq!(ident("a1."), Ok((".", "a1")));
+        assert_eq!(ident("@a1"), Ok(("", "@a1")));
+        assert_eq!(ident("a..b"), Ok(("", "a..b")));
+        assert!(ident("1a").is_err());
+    }
 
-#[test]
-fn test_cddl() {
-    let result = parse_cddl("foo = {\"a\": bar,\n b => baz}");
-    let result = format!("{:?}", result);
-    assert_eq!(
-        result,
-        r#"Ok(Cddl { rules: [Rule { name: "foo", val: AssignType(Type([Simple(Map(Group([GrpChoice([GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Value(Text("a")), cut: true }), value: Type([Simple(Typename("bar"))]) }) }, GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Type1(Simple(Typename("b"))), cut: false }), value: Type([Simple(Typename("baz"))]) }) }])])))])) }] })"#
-    );
-}
+    #[test]
+    fn test_uint() {
+        assert_eq!(uint_u64("999"), Ok(("", 999)));
+        assert_eq!(uint_u64("0"), Ok(("", 0)));
+        assert_eq!(uint_u64("0x100"), Ok(("", 256)));
+        assert_eq!(uint_u64("0b101"), Ok(("", 5)));
+        // We're not supposed to parse leading zeros.
+        assert_eq!(uint_u64("00"), Ok(("0", 0)));
+    }
 
-#[test]
-fn test_cddl_slice() {
-    let result = slice_parse_cddl(" foo = { a: tstr } bar = \n[ int ] ").unwrap();
-    assert_eq!(result.rules[0].1, "foo = { a: tstr }");
-    assert_eq!(result.rules[1].1, "bar = \n[ int ]");
-}
+    #[test]
+    fn test_float_or_int() {
+        assert_eq!(float_or_int("0.0"), Ok(("", Value::Float(0.0))));
+        assert_eq!(float_or_int("1e99"), Ok(("", Value::Float(1e99))));
+        assert_eq!(float_or_int("-1e-99"), Ok(("", Value::Float(-1e-99))));
+        assert_eq!(float_or_int("123"), Ok(("", Value::Uint(123))));
+        assert_eq!(float_or_int("-123"), Ok(("", Value::Nint(-123))));
+        assert_eq!(float_or_int("1e"), Ok(("e", Value::Uint(1))));
+        assert_eq!(float_or_int("1."), Ok((".", Value::Uint(1))));
+        assert!(float_or_int("abc").is_err());
 
-// FIXME: these are things I discovered while validating cbor.  Move them to their own tests?
-#[test]
-fn test_stuff() {
-    parse_cddl("thing = { foo : tstr }").unwrap();
-    parse_cddl("bar = (c: int)").unwrap(); // This is a rule containing a group assignment.
-    parse_cddl("thing = {agroup empty} agroup = (age: int, name: tstr) empty = ()").unwrap();
-    parse_cddl(
-        r#"
-        address = { delivery }
+        assert_eq!(float_or_int("0x100"), Ok(("", Value::Uint(256))));
+        assert_eq!(float_or_int("0b101"), Ok(("", Value::Uint(5))));
+        // We're not supposed to parse leading zeros.
+        assert_eq!(float_or_int("00"), Ok(("0", Value::Uint(0))));
 
-        delivery = (
-        street: tstr, ? "number": uint, city //
-        po_box: uint, city //
-        per_pickup: true )
+        assert_eq!(float_or_int("-0x100"), Ok(("", Value::Nint(-256))));
+        assert_eq!(float_or_int("-0b101"), Ok(("", Value::Nint(-5))));
 
-        city = (
-        name: tstr, zip_code: uint
-        )"#,
-    )
-    .unwrap();
-}
+        // While this is allowed in the CDDL grammar, it doesn't make logical sense
+        // so we want to return an error.
+        assert!(float_or_int("0b1e99").is_err());
+        assert!(float_or_int("0b1.1").is_err());
+    }
 
-#[test]
-fn test_errors() {
-    let err = parse_cddl("x=9999999999999999999999999999999").unwrap_err();
-    assert_eq!(err.kind, MalformedInteger);
+    #[test]
+    fn test_bytestring() {
+        let result1 = bytestring("'abc'");
+        let result = format!("{:?}", result1);
+        assert_eq!(result, r#"Ok(("", [97, 98, 99]))"#);
 
-    let err = parse_cddl(r#"x="\ud800""#).unwrap_err();
-    assert_eq!(err.kind, MalformedText);
+        // Same thing, in hex format
+        assert_eq!(result1, bytestring("h'61 62 63'"));
+        assert_eq!(result1, bytestring("h' 6 1626 3  '"));
 
-    let err = parse_cddl("x=h'61 62 6'").unwrap_err();
-    assert_eq!(err.kind, MalformedHex);
+        // Same thing, in base64 format
+        assert_eq!(result1, bytestring("b64'YWJj'"));
+
+        // bytestring in UTF-8 with escapes
+        assert_eq!(bytestring(r#"'a\nb'"#), Ok(("", "a\nb".into())));
+        assert_eq!(bytestring(r#"'\uD834\uDD1E'"#), Ok(("", "𝄞".into())));
+
+        // Non-text bytes
+        let result2 = vec![0u8, 0xFF, 1, 0x7F];
+        assert_eq!(Ok(("", result2.clone())), bytestring("h'00FF017f'"));
+        assert_eq!(Ok(("", result2.clone())), bytestring("b64'AP8Bfw=='"));
+
+        // Empty inputs
+        assert_eq!(Ok(("", vec![])), bytestring("h''"));
+        assert_eq!(Ok(("", vec![])), bytestring("b64''"));
+
+        fn fail_kind(e: nom::Err<ParseError>) -> ErrorKind {
+            match e {
+                nom::Err::Failure(e) => e.kind,
+                _ => panic!("expected nom::err::Failure, got {:?}", e),
+            }
+        }
+
+        // Bad hex character
+        assert_eq!(
+            fail_kind(bytestring("h'0g1234'").unwrap_err()),
+            ErrorKind::MalformedHex
+        );
+
+        // Bad base64 character "!"
+        assert_eq!(
+            fail_kind(bytestring("b64'AP!Bfw=='").unwrap_err()),
+            ErrorKind::MalformedBase64
+        );
+
+        // wrong flavor of base64: CDDL requires the "base64url" encoding.
+        assert_eq!(
+            // base64 encoding of FBEF00 using the wrong encoder.
+            fail_kind(bytestring("b64'++8A'").unwrap_err()),
+            ErrorKind::MalformedBase64
+        );
+        assert_eq!(
+            // base64 encoding of FFFFFF using the wrong encoder.
+            fail_kind(bytestring("b64'////'").unwrap_err()),
+            ErrorKind::MalformedBase64
+        );
+    }
+
+    #[test]
+    fn test_text() {
+        assert!(is_unescaped_schar('A'));
+        assert!(is_unescaped_schar('の'));
+        assert!(is_unescaped_schar(std::char::from_u32(0x10FF0).unwrap()));
+        assert!(!is_unescaped_schar(0x7F as char));
+
+        assert_eq!(unescaped_schar("Aの"), Ok(("", "Aの")));
+
+        assert_eq!(sesc(r#"\n"#), Ok(("", "n")));
+        assert_eq!(sesc(r#"\nn"#), Ok(("n", "n")));
+        assert_eq!(sesc(r#"\の"#), Ok(("", "の")));
+
+        // FIXME: sesc is allowing characters it shouldn't.
+        // assert_eq!(sesc("\\\x7F"), Ok(("\\\x7F", "")));
+
+        assert_eq!(schar(r#"Ab! \c の \\"#), Ok(("", r#"Ab! \c の \\"#)));
+        assert_eq!(schar(r#"a\nb"#), Ok(("", r#"a\nb"#)));
+        assert_eq!(schar("a\nb"), Ok(("\nb", "a")));
+
+        assert!(text_literal("\"a\nb").is_err());
+        assert!(text_literal("abc").is_err());
+
+        assert_eq!(text_literal(r#""""#), Ok(("", "".into())));
+        assert_eq!(text_literal(r#""a\nb""#), Ok(("", "a\nb".into())));
+        assert_eq!(text_literal(r#""\uD834\uDD1E""#), Ok(("", "𝄞".into())));
+        assert_eq!(text_literal(r#""の""#), Ok(("", "の".into())));
+    }
+
+    #[test]
+    fn test_value() {
+        assert_eq!(value("123"), Ok(("", Value::Uint(123))));
+        assert_eq!(value(r#""abc""#), Ok(("", Value::Text("abc".into()))));
+        assert!(value("abc").is_err());
+    }
+
+    #[test]
+    fn test_member() {
+        let result = grpent_member("a:b");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", Member { key: Some(MemberKey { val: Bareword("a"), cut: true }), value: Type([Simple(Typename("b"))]) }))"#
+        );
+
+        let result = grpent_member("foo");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", Member { key: None, value: Type([Simple(Typename("foo"))]) }))"#
+        );
+        let result = grpent_member("a => b");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", Member { key: Some(MemberKey { val: Type1(Simple(Typename("a"))), cut: false }), value: Type([Simple(Typename("b"))]) }))"#
+        );
+
+        let result = grpent_member("42 ^ => b");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", Member { key: Some(MemberKey { val: Type1(Simple(Value(Uint(42)))), cut: true }), value: Type([Simple(Typename("b"))]) }))"#
+        );
+    }
+
+    #[test]
+    fn test_grpent_parens() {
+        let result = grpent_parens("()");
+        let result = format!("{:?}", result);
+        assert_eq!(result, r#"Ok(("", Group([GrpChoice([])])))"#);
+    }
+
+    #[test]
+    fn test_grpent_val() {
+        let result = grpent_val("foo");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", Member(Member { key: None, value: Type([Simple(Typename("foo"))]) })))"#
+        );
+
+        let result = grpent_val("17");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", Member(Member { key: None, value: Type([Simple(Value(Uint(17)))]) })))"#
+        );
+    }
+
+    #[test]
+    fn test_occur() {
+        assert_eq!(occur("?"), Ok(("", Occur::Optional)));
+        assert_eq!(occur("+"), Ok(("", Occur::OneOrMore)));
+        assert_eq!(occur("*"), Ok(("", Occur::ZeroOrMore)));
+        assert_eq!(occur("*9"), Ok(("", Occur::Numbered(0, 9))));
+        assert_eq!(occur("7*"), Ok(("", Occur::Numbered(7, std::usize::MAX))));
+        assert_eq!(occur("7*9"), Ok(("", Occur::Numbered(7, 9))));
+        assert_eq!(occur("0b100*0x10"), Ok(("", Occur::Numbered(4, 16))));
+    }
+
+    #[test]
+    fn test_grpent() {
+        let result = grpent("foo");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("foo"))]) }) }))"#
+        );
+
+        let result = grpent("foo: bar");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Bareword("foo"), cut: true }), value: Type([Simple(Typename("bar"))]) }) }))"#
+        );
+    }
+
+    #[test]
+    fn test_grpchoice_empty() {
+        let result = grpchoice("");
+        let result = format!("{:?}", result);
+        assert_eq!(result, r#"Ok(("", GrpChoice([])))"#);
+    }
+
+    #[test]
+    fn test_group_empty() {
+        let result = group("");
+        let result = format!("{:?}", result);
+        assert_eq!(result, r#"Ok(("", Group([GrpChoice([])])))"#);
+    }
+
+    #[test]
+    fn test_type1() {
+        let result = type1("1 .. 9");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", Range(TypeRange { start: Value(Uint(1)), end: Value(Uint(9)), inclusive: true })))"#
+        );
+
+        let result = type1("0x10 .. 0x1C");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", Range(TypeRange { start: Value(Uint(16)), end: Value(Uint(28)), inclusive: true })))"#
+        );
+
+        let result = type1("1 ... 9");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", Range(TypeRange { start: Value(Uint(1)), end: Value(Uint(9)), inclusive: false })))"#
+        );
+
+        let result = type1("uint .size 3");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", Control(TypeControl { first: Typename("uint"), second: Value(Uint(3)), op: "size" })))"#
+        );
+
+        // RFC8610 2.2.2.1 points out that "min..max" is not a range, but an identifier
+        // (because '.' is a valid ident character).
+        let result = type2("min..max");
+        let result = format!("{:?}", result);
+        assert_eq!(result, r#"Ok(("", Typename("min..max")))"#);
+    }
+
+    #[test]
+    fn test_grpchoice() {
+        let result = grpchoice("abc");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", GrpChoice([GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("abc"))]) }) }])))"#
+        );
+
+        let result = grpchoice("abc, def");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(("", GrpChoice([GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("abc"))]) }) }, GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("def"))]) }) }])))"#
+        );
+    }
+
+    #[test]
+    fn test_rule() {
+        let result = rule("foo=bar").unwrap().1;
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Rule { name: "foo", val: AssignType(Type([Simple(Typename("bar"))])) }"#
+        );
+    }
+
+    #[test]
+    fn test_cddl() {
+        let result = parse_cddl("foo = {\"a\": bar,\n b => baz}");
+        let result = format!("{:?}", result);
+        assert_eq!(
+            result,
+            r#"Ok(Cddl { rules: [Rule { name: "foo", val: AssignType(Type([Simple(Map(Group([GrpChoice([GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Value(Text("a")), cut: true }), value: Type([Simple(Typename("bar"))]) }) }, GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Type1(Simple(Typename("b"))), cut: false }), value: Type([Simple(Typename("baz"))]) }) }])])))])) }] })"#
+        );
+    }
+
+    #[test]
+    fn test_cddl_slice() {
+        let result = slice_parse_cddl(" foo = { a: tstr } bar = \n[ int ] ").unwrap();
+        assert_eq!(result.rules[0].1, "foo = { a: tstr }");
+        assert_eq!(result.rules[1].1, "bar = \n[ int ]");
+    }
+
+    // FIXME: these are things I discovered while validating cbor.  Move them to their own tests?
+    #[test]
+    fn test_stuff() {
+        parse_cddl("thing = { foo : tstr }").unwrap();
+        parse_cddl("bar = (c: int)").unwrap(); // This is a rule containing a group assignment.
+        parse_cddl("thing = {agroup empty} agroup = (age: int, name: tstr) empty = ()").unwrap();
+        parse_cddl(
+            r#"
+            address = { delivery }
+
+            delivery = (
+            street: tstr, ? "number": uint, city //
+            po_box: uint, city //
+            per_pickup: true )
+
+            city = (
+            name: tstr, zip_code: uint
+            )"#,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn test_errors() {
+        let err = parse_cddl("x=9999999999999999999999999999999").unwrap_err();
+        assert_eq!(err.kind, MalformedInteger);
+
+        let err = parse_cddl(r#"x="\ud800""#).unwrap_err();
+        assert_eq!(err.kind, MalformedText);
+
+        let err = parse_cddl("x=h'61 62 6'").unwrap_err();
+        assert_eq!(err.kind, MalformedHex);
+    }
 }
