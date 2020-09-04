@@ -82,7 +82,7 @@ Note: float sizes are not validated.
 Supported CDDL features:
 - Basic prelude types (integers, floats, bool, nil, text strings, byte strings)
 - Literal int, float, bool, UTF-8 text strings
-- Byte strings in UTF-8 or hex
+- Byte strings in UTF-8, hex, or base64
 - Arrays and maps
 - Rule lookups by name
 - Groups
@@ -102,7 +102,6 @@ Unimplemented features:
 - Group enumeration with `&`
 - Tagged data with `#`
 - Hexfloat literals (e.g. `0x1.921fb5p+1`)
-- Base64 bytestring literals (`b64'...'`)
 - Prelude types that invoke CBOR tags (e.g. `tdate` or `biguint`)
 
 [`Node`]: ivt::Node
