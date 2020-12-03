@@ -1123,6 +1123,112 @@ pub fn slice_parse_cddl(input: &str) -> Result<CddlSlice, ParseError> {
     Ok(result.1)
 }
 
+// Useful utilities for testing the parser.
+#[cfg(test)]
+#[macro_use]
+mod test_utils {
+    use super::*;
+
+    // Generate a Vec<String> the same way we would generate a Vec<&str>.
+    macro_rules! vec_strings {
+        ($($str:expr),*) => ({
+            vec![$(String::from($str),)*] as Vec<String>
+        });
+    }
+
+    // Given a string, generate a Type1 containing a type name.
+    impl From<&str> for Type1 {
+        fn from(s: &str) -> Self {
+            Type1::Simple(Type2::Typename(s.into()))
+        }
+    }
+
+    // Given a string, generate a GrpEnt containing that type name.
+    impl From<&str> for GrpEnt {
+        fn from(s: &str) -> GrpEnt {
+            GrpEnt {
+                occur: None,
+                val: GrpEntVal::Member(Member {
+                    key: None,
+                    value: s.into(),
+                }),
+            }
+        }
+    }
+
+    // A trait for generating literals.
+    pub trait CreateLiteral {
+        fn literal(self) -> Value;
+    }
+
+    // Create a literal string.
+    impl CreateLiteral for &str {
+        fn literal(self) -> Value {
+            Value::Text(self.to_string())
+        }
+    }
+
+    // Given a Value (a literal), generate a MemberKeyVal.
+    impl From<Value> for MemberKeyVal {
+        fn from(k: Value) -> MemberKeyVal {
+            MemberKeyVal::Value(k)
+        }
+    }
+
+    // Given a string, generate a MemberKeyVal (treating it as a type name).
+    impl From<&str> for MemberKeyVal {
+        fn from(k: &str) -> MemberKeyVal {
+            MemberKeyVal::Type1(k.into())
+        }
+    }
+
+    fn gen_kv<K: Into<MemberKeyVal>>(k: K, v: &str, cut: bool) -> GrpEnt {
+        GrpEnt {
+            occur: None,
+            val: GrpEntVal::Member(Member {
+                key: Some(MemberKey { val: k.into(), cut }),
+                value: v.into(),
+            }),
+        }
+    }
+
+    pub fn kv<K: Into<MemberKeyVal>>(k: K, v: &str) -> GrpEnt {
+        gen_kv(k, v, true)
+    }
+
+    pub fn kv_nocut<K: Into<MemberKeyVal>>(k: K, v: &str) -> GrpEnt {
+        gen_kv(k, v, false)
+    }
+
+    pub fn gen_array<T: Into<GrpEnt>>(mut members: Vec<T>) -> Type1 {
+        // convert the members into individual GrpEnt structs
+        let grpents: Vec<GrpEnt> = members.drain(..).map(|x| x.into()).collect();
+        // construct an array containing one GrpChoice.
+        Type1::Simple(Type2::Array(Group(vec![GrpChoice(grpents)])))
+    }
+
+    pub fn gen_map<T: Into<GrpEnt>>(mut members: Vec<T>) -> Type1 {
+        // convert the members into individual GrpEnt structs
+        let grpents: Vec<GrpEnt> = members.drain(..).map(|x| x.into()).collect();
+        // construct a map containing one GrpChoice.
+        Type1::Simple(Type2::Map(Group(vec![GrpChoice(grpents)])))
+    }
+
+    // Generate a single-Type1 Type struct.
+    impl From<Type1> for Type {
+        fn from(x: Type1) -> Self {
+            Type(vec![x])
+        }
+    }
+
+    // Generate a single-Type1 Type struct from a plain string (as a type name).
+    impl Into<Type> for &str {
+        fn into(self) -> Type {
+            Type(vec![Type1::from(self)])
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
