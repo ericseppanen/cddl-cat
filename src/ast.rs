@@ -217,6 +217,8 @@ pub struct Type(pub Vec<Type1>);
 pub struct Rule {
     /// The rule name.
     pub name: String,
+    /// Generic parameters.
+    pub generic_parms: Vec<String>,
     /// The rule syntax tree.
     pub val: RuleVal,
 }

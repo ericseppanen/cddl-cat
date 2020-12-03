@@ -1057,15 +1057,34 @@ fn rule_val(input: &str) -> JResult<&str, RuleVal> {
     (input)
 }
 
+// genericparm = "<" S id S *("," S id S ) ">"
+#[rustfmt::skip]
+fn generic_parm(input: &str) -> JResult<&str, Vec<&str>> {
+    delimited(
+        pair(tag("<"), ws),
+        separated_nonempty_list(
+            pair(tag(","), ws),
+            terminated(ident, ws)),
+        tag(">"),
+    )(input)
+}
+
 #[rustfmt::skip]
 fn rule(input: &str) -> JResult<&str, Rule> {
     let f = separated_pair(
-        ident,
+        pair(
+            ident,
+            opt(generic_parm)
+        ),
         ws,
         rule_val
     );
-    map(f, |(name, val)| Rule{ name: name.into(), val } )
-    (input)
+    map(f, |((name, gp), val)| Rule {
+        name: name.into(),
+        // turn Vec<&str> into Vec<String>
+        generic_parms: gp.unwrap_or(Vec::new()).drain(..).map(|s| s.to_string()).collect(),
+        val,
+    })(input)
 }
 
 // cddl = S 1*(rule S)
@@ -1231,6 +1250,7 @@ mod test_utils {
 
 #[cfg(test)]
 mod tests {
+    use super::test_utils::*;
     use super::*;
 
     #[test]
@@ -1531,22 +1551,61 @@ mod tests {
     }
 
     #[test]
+    fn test_generic_parm() {
+        assert!(generic_parm("").is_err());
+
+        assert!(generic_parm("<>").is_err());
+
+        let result = generic_parm("<foo>").unwrap().1;
+        assert_eq!(result, vec!["foo"]);
+
+        let result = generic_parm("<foo,bar>").unwrap().1;
+        assert_eq!(result, vec!["foo", "bar"]);
+
+        let result = generic_parm("< foo , _bar_ >").unwrap().1;
+        assert_eq!(result, vec!["foo", "_bar_"]);
+    }
+
+    #[test]
     fn test_rule() {
         let result = rule("foo=bar").unwrap().1;
-        let result = format!("{:?}", result);
+
         assert_eq!(
             result,
-            r#"Rule { name: "foo", val: AssignType(Type([Simple(Typename("bar"))])) }"#
+            Rule {
+                name: "foo".into(),
+                generic_parms: vec![],
+                val: RuleVal::AssignType("bar".into())
+            }
+        );
+
+        let result = rule("message<t, v> = [t, v]").unwrap().1;
+        assert_eq!(
+            result,
+            Rule {
+                name: "message".into(),
+                generic_parms: vec_strings!["t", "v"],
+                val: RuleVal::AssignType(gen_array(vec!["t", "v"]).into())
+            }
         );
     }
 
     #[test]
     fn test_cddl() {
         let result = parse_cddl("foo = {\"a\": bar,\n b => baz}");
-        let result = format!("{:?}", result);
+
         assert_eq!(
-            result,
-            r#"Ok(Cddl { rules: [Rule { name: "foo", val: AssignType(Type([Simple(Map(Group([GrpChoice([GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Value(Text("a")), cut: true }), value: Type([Simple(Typename("bar"))]) }) }, GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Type1(Simple(Typename("b"))), cut: false }), value: Type([Simple(Typename("baz"))]) }) }])])))])) }] })"#
+            result.unwrap(),
+            Cddl {
+                rules: vec![Rule {
+                    name: "foo".into(),
+                    generic_parms: vec![],
+                    val: RuleVal::AssignType(Type(vec![gen_map(vec![
+                        kv("a".literal(), "bar"),
+                        kv_nocut("b", "baz")
+                    ])]))
+                }]
+            }
         );
     }
 
