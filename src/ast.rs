@@ -120,6 +120,28 @@ pub struct GrpChoice(pub Vec<GrpEnt>);
 #[derive(Debug, PartialEq)]
 pub struct Group(pub Vec<GrpChoice>);
 
+/// A name identifier with generic arguments.
+///
+/// A name may have generic arguments, e.g. `message<K,V>`.
+/// A name without generic arguments will have an empty generic_args Vec.
+///
+/// CDDL ABNF grammar:
+/// ```text
+/// genericarg = "<" S type1 S *("," S type1 S ) ">"
+/// type2 = ...
+///       / typename [genericarg]
+///       / "~" S typename [genericarg]
+///       / "&" S groupname [genericarg]
+///       / ...
+/// ```
+#[derive(Debug, PartialEq)]
+pub struct NameGeneric {
+    /// A type or group name.
+    pub name: String,
+    /// Generic arguments, if any.
+    pub generic_args: Vec<Type1>,
+}
+
 /// Type2 is the main representation of a CDDL type.
 ///
 /// Note: not all type2 syntax is implemented.
@@ -143,11 +165,11 @@ pub struct Group(pub Vec<GrpChoice>);
 #[allow(missing_docs)]
 pub enum Type2 {
     Value(Value),
-    Typename(String),
+    Typename(NameGeneric),
     Parethesized(Type),
     Map(Group),
     Array(Group),
-    Unwrap(String),
+    Unwrap(NameGeneric),
 }
 
 /// A CDDL type, with an additional range or control operator.

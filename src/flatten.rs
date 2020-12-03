@@ -94,6 +94,15 @@ fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
     }
 }
 
+// This is a temporary crutch until generic parameters are supported.
+fn ignore_generic_arg(name_generic: &ast::NameGeneric) -> FlattenResult<&str> {
+    if name_generic.generic_args.is_empty() {
+        Ok(&name_generic.name)
+    } else {
+        Err(ValidateError::Unsupported("generic arg".into()))
+    }
+}
+
 // The only way a range start or end can be specified is with a literal
 // value, or with a typename.  We will accept either of those, and throw
 // an error otherwise.  Let the validator worry about whether a typename
@@ -101,7 +110,7 @@ fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
 fn range_point(point: &ast::Type2) -> FlattenResult<Node> {
     let node = match point {
         ast::Type2::Value(v) => flatten_value(v),
-        ast::Type2::Typename(t) => flatten_typename(t),
+        ast::Type2::Typename(t) => flatten_typename(ignore_generic_arg(t)?),
         _ => Err(ValidateError::Structural(
             "bad type on range operator".into(),
         )),
@@ -148,11 +157,11 @@ fn flatten_type2(ty2: &ast::Type2) -> FlattenResult<Node> {
     use ast::Type2;
     match ty2 {
         Type2::Value(v) => flatten_value(v),
-        Type2::Typename(s) => flatten_typename(&s),
+        Type2::Typename(s) => flatten_typename(ignore_generic_arg(s)?),
         Type2::Parethesized(t) => flatten_type(t),
         Type2::Map(g) => flatten_map(&g),
         Type2::Array(g) => flatten_array(&g),
-        Type2::Unwrap(r) => Ok(Node::Unwrap(Rule::new(r))),
+        Type2::Unwrap(r) => Ok(Node::Unwrap(Rule::new(ignore_generic_arg(r)?))),
     }
 }
 

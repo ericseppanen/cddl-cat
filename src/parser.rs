@@ -627,7 +627,7 @@ fn grpent_memberkey_tail(input: &str) -> JResult<&str, Type> {
 fn assemble_basic_member(key: Type1, value: Type) -> Member {
     let member_key = match key {
         Type1::Simple(Type2::Value(v)) => MemberKeyVal::Value(v),
-        Type1::Simple(Type2::Typename(s)) => MemberKeyVal::Bareword(s),
+        Type1::Simple(Type2::Typename(s)) => MemberKeyVal::Bareword(s.name), // FIXME: ignoring generic args
         _ => panic!("assemble_basic_member wrong key type"),
     };
     Member {
@@ -917,12 +917,12 @@ fn type2_array(input: &str) -> JResult<&str, Group> {
 
 // "~" S typename [genericarg]
 #[rustfmt::skip]
-fn type2_unwrap(input: &str) -> JResult<&str, &str> {
+fn type2_unwrap(input: &str) -> JResult<&str, NameGeneric> {
     preceded(
         tag("~"),
         preceded(
             ws,
-            ident
+            name_generic
         )
     )
     (input)
@@ -943,11 +943,11 @@ fn type2_unwrap(input: &str) -> JResult<&str, &str> {
 fn type2(input: &str) -> JResult<&str, Type2> {
     alt((
         map(value, Type2::Value),
-        map(ident, |i| Type2::Typename(i.into())),
+        map(name_generic, Type2::Typename),
         map(type2_parens, Type2::Parethesized),
         map(type2_map, Type2::Map),
         map(type2_array, Type2::Array),
-        map(type2_unwrap, |s| Type2::Unwrap(s.into())),
+        map(type2_unwrap, Type2::Unwrap),
     ))
     (input)
 }
@@ -1069,6 +1069,33 @@ fn generic_parm(input: &str) -> JResult<&str, Vec<&str>> {
     )(input)
 }
 
+// genericarg = "<" S type1 S *("," S type1 S ) ">"
+#[rustfmt::skip]
+fn generic_arg(input: &str) -> JResult<&str, Vec<Type1>> {
+    delimited(
+        pair(tag("<"), ws),
+        separated_nonempty_list(
+            pair(tag(","), ws),
+            terminated(type1, ws)),
+        tag(">"),
+    )(input)
+}
+
+// A type or group name, followed by optional generic arguments.
+#[rustfmt::skip]
+fn name_generic(input: &str) -> JResult<&str, NameGeneric> {
+    let f = pair(ident, opt(generic_arg));
+    map(f, |(name, generic)| {
+        // Replace None with empty Vec.
+        let generic_args = generic.unwrap_or(Vec::new());
+        NameGeneric {
+            name: name.to_string(),
+            generic_args,
+        }
+    })
+    (input)
+}
+
 #[rustfmt::skip]
 fn rule(input: &str) -> JResult<&str, Rule> {
     let f = separated_pair(
@@ -1153,6 +1180,16 @@ mod test_utils {
         ($($str:expr),*) => ({
             vec![$(String::from($str),)*] as Vec<String>
         });
+    }
+
+    // Given a string, generate a NameGeneric containing a type name.
+    impl From<&str> for NameGeneric {
+        fn from(s: &str) -> Self {
+            NameGeneric {
+                name: s.to_string(),
+                generic_args: Vec::new(),
+            }
+        }
     }
 
     // Given a string, generate a Type2 containing a type name.
@@ -1604,14 +1641,30 @@ mod tests {
 
         assert!(generic_parm("<>").is_err());
 
-        let result = generic_parm("<foo>").unwrap().1;
-        assert_eq!(result, vec!["foo"]);
+        let result = generic_parm("<foo>").unwrap();
+        assert_eq!(result.1, vec!["foo"]);
 
-        let result = generic_parm("<foo,bar>").unwrap().1;
-        assert_eq!(result, vec!["foo", "bar"]);
+        let result = generic_parm("<foo,bar>").unwrap();
+        assert_eq!(result.1, vec!["foo", "bar"]);
 
-        let result = generic_parm("< foo , _bar_ >").unwrap().1;
-        assert_eq!(result, vec!["foo", "_bar_"]);
+        let result = generic_parm("< foo , _bar_ >").unwrap();
+        assert_eq!(result.1, vec!["foo", "_bar_"]);
+    }
+
+    #[test]
+    fn test_generic_arg() {
+        assert!(generic_arg("").is_err());
+
+        assert!(generic_arg("<>").is_err());
+
+        let result = generic_arg("<foo>").unwrap();
+        assert_eq!(result.1, vec!["foo".into()]);
+
+        let result = generic_arg("<foo,bar>").unwrap();
+        assert_eq!(result.1, vec!["foo".into(), "bar".into()]);
+
+        let result = generic_arg("< foo , _bar_ >").unwrap();
+        assert_eq!(result.1, vec!["foo".into(), "_bar_".into()]);
     }
 
     #[test]
