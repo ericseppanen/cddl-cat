@@ -1155,10 +1155,44 @@ mod test_utils {
         });
     }
 
+    // Given a string, generate a Type2 containing a type name.
+    impl From<&str> for Type2 {
+        fn from(s: &str) -> Self {
+            Type2::Typename(s.into())
+        }
+    }
+
     // Given a string, generate a Type1 containing a type name.
     impl From<&str> for Type1 {
         fn from(s: &str) -> Self {
             Type1::Simple(Type2::Typename(s.into()))
+        }
+    }
+
+    // Given a Value, generate a Type1.
+    impl From<Value> for Type1 {
+        fn from(v: Value) -> Self {
+            Type1::Simple(Type2::Value(v))
+        }
+    }
+
+    // Given a string, generate a Member containing a no-key value.
+    impl From<&str> for Member {
+        fn from(s: &str) -> Self {
+            Member {
+                key: None,
+                value: s.into(),
+            }
+        }
+    }
+
+    // Given a Value, generate a Member containing a no-key value.
+    impl From<Value> for Member {
+        fn from(v: Value) -> Self {
+            Member {
+                key: None,
+                value: Type1::from(v).into(),
+            }
         }
     }
 
@@ -1167,10 +1201,7 @@ mod test_utils {
         fn from(s: &str) -> GrpEnt {
             GrpEnt {
                 occur: None,
-                val: GrpEntVal::Member(Member {
-                    key: None,
-                    value: s.into(),
-                }),
+                val: GrpEntVal::Member(s.into()),
             }
         }
     }
@@ -1187,10 +1218,34 @@ mod test_utils {
         }
     }
 
+    // Create a literal integer.
+    impl CreateLiteral for i64 {
+        fn literal(self) -> Value {
+            if self >= 0 {
+                Value::Uint(self as u64)
+            } else {
+                Value::Nint(self)
+            }
+        }
+    }
+
+    impl From<Value> for Type2 {
+        fn from(x: Value) -> Type2 {
+            Type2::Value(x)
+        }
+    }
+
     // Given a Value (a literal), generate a MemberKeyVal.
     impl From<Value> for MemberKeyVal {
         fn from(k: Value) -> MemberKeyVal {
             MemberKeyVal::Value(k)
+        }
+    }
+
+    // Given a Type1, generate a MemberKeyVal.
+    impl From<Type1> for MemberKeyVal {
+        fn from(t: Type1) -> MemberKeyVal {
+            MemberKeyVal::Type1(t)
         }
     }
 
@@ -1201,22 +1256,37 @@ mod test_utils {
         }
     }
 
-    fn gen_kv<K: Into<MemberKeyVal>>(k: K, v: &str, cut: bool) -> GrpEnt {
-        GrpEnt {
-            occur: None,
-            val: GrpEntVal::Member(Member {
-                key: Some(MemberKey { val: k.into(), cut }),
-                value: v.into(),
-            }),
+    #[derive(Copy, Clone)]
+    pub enum MemberCut {
+        Cut,
+        NoCut,
+    }
+    pub use MemberCut::*;
+
+    impl From<MemberCut> for bool {
+        fn from(c: MemberCut) -> bool {
+            match c {
+                Cut => true,
+                NoCut => false,
+            }
         }
     }
 
-    pub fn kv<K: Into<MemberKeyVal>>(k: K, v: &str) -> GrpEnt {
-        gen_kv(k, v, true)
+    pub fn kv_member<K: Into<MemberKeyVal>>(k: K, v: &str, cut: MemberCut) -> Member {
+        Member {
+            key: Some(MemberKey {
+                val: k.into(),
+                cut: cut.into(),
+            }),
+            value: v.into(),
+        }
     }
 
-    pub fn kv_nocut<K: Into<MemberKeyVal>>(k: K, v: &str) -> GrpEnt {
-        gen_kv(k, v, false)
+    pub fn kv<K: Into<MemberKeyVal>>(k: K, v: &str, cut: MemberCut) -> GrpEnt {
+        GrpEnt {
+            occur: None,
+            val: GrpEntVal::Member(kv_member(k, v, cut)),
+        }
     }
 
     pub fn gen_array<T: Into<GrpEnt>>(mut members: Vec<T>) -> Type1 {
@@ -1241,9 +1311,9 @@ mod test_utils {
     }
 
     // Generate a single-Type1 Type struct from a plain string (as a type name).
-    impl Into<Type> for &str {
-        fn into(self) -> Type {
-            Type(vec![Type1::from(self)])
+    impl From<&str> for Type {
+        fn from(s: &str) -> Self {
+            Type(vec![Type1::from(s)])
         }
     }
 }
@@ -1403,55 +1473,37 @@ mod tests {
     #[test]
     fn test_member() {
         let result = grpent_member("a:b");
-        let result = format!("{:?}", result);
         assert_eq!(
-            result,
-            r#"Ok(("", Member { key: Some(MemberKey { val: Bareword("a"), cut: true }), value: Type([Simple(Typename("b"))]) }))"#
+            result.unwrap().1,
+            kv_member(MemberKeyVal::Bareword("a".into()), "b", Cut)
         );
 
         let result = grpent_member("foo");
-        let result = format!("{:?}", result);
-        assert_eq!(
-            result,
-            r#"Ok(("", Member { key: None, value: Type([Simple(Typename("foo"))]) }))"#
-        );
+        assert_eq!(result.unwrap().1, "foo".into());
+
         let result = grpent_member("a => b");
-        let result = format!("{:?}", result);
-        assert_eq!(
-            result,
-            r#"Ok(("", Member { key: Some(MemberKey { val: Type1(Simple(Typename("a"))), cut: false }), value: Type([Simple(Typename("b"))]) }))"#
-        );
+        assert_eq!(result.unwrap().1, kv_member("a", "b", NoCut));
 
         let result = grpent_member("42 ^ => b");
-        let result = format!("{:?}", result);
         assert_eq!(
-            result,
-            r#"Ok(("", Member { key: Some(MemberKey { val: Type1(Simple(Value(Uint(42)))), cut: true }), value: Type([Simple(Typename("b"))]) }))"#
+            result.unwrap().1,
+            kv_member(Type1::from(42.literal()), "b", Cut)
         );
     }
 
     #[test]
     fn test_grpent_parens() {
         let result = grpent_parens("()");
-        let result = format!("{:?}", result);
-        assert_eq!(result, r#"Ok(("", Group([GrpChoice([])])))"#);
+        assert_eq!(result.unwrap().1, Group(vec![GrpChoice(vec![])]));
     }
 
     #[test]
     fn test_grpent_val() {
         let result = grpent_val("foo");
-        let result = format!("{:?}", result);
-        assert_eq!(
-            result,
-            r#"Ok(("", Member(Member { key: None, value: Type([Simple(Typename("foo"))]) })))"#
-        );
+        assert_eq!(result.unwrap().1, GrpEntVal::Member("foo".into()));
 
         let result = grpent_val("17");
-        let result = format!("{:?}", result);
-        assert_eq!(
-            result,
-            r#"Ok(("", Member(Member { key: None, value: Type([Simple(Value(Uint(17)))]) })))"#
-        );
+        assert_eq!(result.unwrap().1, GrpEntVal::Member(17.literal().into()));
     }
 
     #[test]
@@ -1467,87 +1519,83 @@ mod tests {
 
     #[test]
     fn test_grpent() {
-        let result = grpent("foo");
-        let result = format!("{:?}", result);
-        assert_eq!(
-            result,
-            r#"Ok(("", GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("foo"))]) }) }))"#
-        );
+        let result = grpent("foo").unwrap();
+        assert_eq!(result.1, "foo".into());
 
-        let result = grpent("foo: bar");
-        let result = format!("{:?}", result);
+        let result = grpent("foo: bar").unwrap();
         assert_eq!(
-            result,
-            r#"Ok(("", GrpEnt { occur: None, val: Member(Member { key: Some(MemberKey { val: Bareword("foo"), cut: true }), value: Type([Simple(Typename("bar"))]) }) }))"#
+            result.1,
+            kv(MemberKeyVal::Bareword("foo".into()), "bar", Cut)
         );
     }
 
     #[test]
     fn test_grpchoice_empty() {
-        let result = grpchoice("");
-        let result = format!("{:?}", result);
-        assert_eq!(result, r#"Ok(("", GrpChoice([])))"#);
+        let result = grpchoice("").unwrap();
+        assert_eq!(result.1, GrpChoice(vec![]));
     }
 
     #[test]
     fn test_group_empty() {
-        let result = group("");
-        let result = format!("{:?}", result);
-        assert_eq!(result, r#"Ok(("", Group([GrpChoice([])])))"#);
+        let result = group("").unwrap();
+        assert_eq!(result.1, Group(vec![GrpChoice(vec![])]));
     }
 
     #[test]
     fn test_type1() {
         let result = type1("1 .. 9");
-        let result = format!("{:?}", result);
         assert_eq!(
-            result,
-            r#"Ok(("", Range(TypeRange { start: Value(Uint(1)), end: Value(Uint(9)), inclusive: true })))"#
+            result.unwrap().1,
+            Type1::Range(TypeRange {
+                start: 1.literal().into(),
+                end: 9.literal().into(),
+                inclusive: true
+            })
         );
 
         let result = type1("0x10 .. 0x1C");
-        let result = format!("{:?}", result);
         assert_eq!(
-            result,
-            r#"Ok(("", Range(TypeRange { start: Value(Uint(16)), end: Value(Uint(28)), inclusive: true })))"#
+            result.unwrap().1,
+            Type1::Range(TypeRange {
+                start: 16.literal().into(),
+                end: 28.literal().into(),
+                inclusive: true
+            })
         );
 
         let result = type1("1 ... 9");
-        let result = format!("{:?}", result);
         assert_eq!(
-            result,
-            r#"Ok(("", Range(TypeRange { start: Value(Uint(1)), end: Value(Uint(9)), inclusive: false })))"#
+            result.unwrap().1,
+            Type1::Range(TypeRange {
+                start: 1.literal().into(),
+                end: 9.literal().into(),
+                inclusive: false
+            })
         );
 
         let result = type1("uint .size 3");
-        let result = format!("{:?}", result);
         assert_eq!(
-            result,
-            r#"Ok(("", Control(TypeControl { first: Typename("uint"), second: Value(Uint(3)), op: "size" })))"#
+            result.unwrap().1,
+            Type1::Control(TypeControl {
+                first: "uint".into(),
+                second: 3.literal().into(),
+                op: "size".to_string()
+            })
         );
 
         // RFC8610 2.2.2.1 points out that "min..max" is not a range, but an identifier
         // (because '.' is a valid ident character).
         let result = type2("min..max");
-        let result = format!("{:?}", result);
-        assert_eq!(result, r#"Ok(("", Typename("min..max")))"#);
+        assert_eq!(result.unwrap().1, "min..max".into());
     }
 
     #[test]
     fn test_grpchoice() {
-        let result = grpchoice("abc");
-        let result = format!("{:?}", result);
-        assert_eq!(
-            result,
-            r#"Ok(("", GrpChoice([GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("abc"))]) }) }])))"#
-        );
+        let result = grpchoice("abc").unwrap();
+        assert_eq!(result.1, GrpChoice(vec!["abc".into()]));
 
-        let result = grpchoice("abc, def");
-        let result = format!("{:?}", result);
-        assert_eq!(
-            result,
-            r#"Ok(("", GrpChoice([GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("abc"))]) }) }, GrpEnt { occur: None, val: Member(Member { key: None, value: Type([Simple(Typename("def"))]) }) }])))"#
-        );
+        let result = grpchoice("abc, def").unwrap();
+        assert_eq!(result.1, GrpChoice(vec!["abc".into(), "def".into(),]));
     }
 
     #[test]
@@ -1601,8 +1649,8 @@ mod tests {
                     name: "foo".into(),
                     generic_parms: vec![],
                     val: RuleVal::AssignType(Type(vec![gen_map(vec![
-                        kv("a".literal(), "bar"),
-                        kv_nocut("b", "baz")
+                        kv("a".literal(), "bar", Cut),
+                        kv("b", "baz", NoCut)
                     ])]))
                 }]
             }
