@@ -90,7 +90,7 @@ fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
     match ty1 {
         Simple(ty2) => flatten_type2(ty2),
         Range(r) => flatten_range(r),
-        Control(_) => Err(ValidateError::Unsupported("range operator".into())),
+        Control(_) => Err(ValidateError::Unsupported("control operator".into())),
     }
 }
 
