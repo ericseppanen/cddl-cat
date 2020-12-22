@@ -1,6 +1,7 @@
 #![cfg(feature = "serde_json")]
 
 use cddl_cat::json::validate_json_str;
+use cddl_cat::util::ErrorMatch;
 use serde::{Deserialize, Serialize};
 
 #[test]
@@ -498,4 +499,160 @@ fn validate_choice_example() {
     let input = Pickup { per_pickup: true };
     let json_str = serde_json::to_string(&input).unwrap();
     validate_json_str("address", cddl_input, &json_str).unwrap();
+}
+
+#[test]
+fn json_generic_basic() {
+    let cddl_input = r#"identity<T> = T  thing = identity<int>"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, r#""abc""#).err_mismatch();
+    validate_json_str("identity", cddl_input, "0").err_generic();
+
+    let cddl_input = r#"double<T> = (T, T) thing = [int, double<int>]"#;
+    validate_json_str("thing", cddl_input, "[1, 2, 3]").unwrap();
+    validate_json_str("thing", cddl_input, "[1.0, 2, 3]").err_mismatch();
+    validate_json_str("thing", cddl_input, "[1, 2, 3.0]").err_mismatch();
+
+    let cddl_input = "message<t, v> = [t, v]  thing = message<tstr, int>";
+    validate_json_str("thing", cddl_input, r#"["JSON", 123]"#).unwrap();
+    validate_json_str("thing", cddl_input, r#"[123, "JSON"]"#).err_mismatch();
+
+    let cddl_input = r#"identity<T> = T   thing = [identity<(int)>]"#;
+    validate_json_str("thing", cddl_input, "[1]").unwrap();
+
+    let cddl_input = r#"identity<T> = (T)   thing = [identity<(int)>]"#;
+    validate_json_str("thing", cddl_input, "[1]").unwrap();
+
+    let cddl_input = r#"double<T> = (T, T)   thing = [double<[int, int]>]"#;
+    validate_json_str("thing", cddl_input, "[[1, 2], [3, 4]]").unwrap();
+
+    let cddl_input = r#"double<T> = (T, T)   identity<I> = I   thing = [double<identity<int>>]"#;
+    validate_json_str("thing", cddl_input, "[1, 2]").unwrap();
+}
+
+#[test]
+fn json_generic_occurrence() {
+    let cddl_input = r#"one_or_more<T> = (+ T)  thing = [one_or_more<int>]"#;
+    validate_json_str("thing", cddl_input, "[4]").unwrap();
+    validate_json_str("thing", cddl_input, "[4, 5, 6]").unwrap();
+    validate_json_str("thing", cddl_input, "[]").err_mismatch();
+
+    let cddl_input = r#"three_to_five<T> = (3*5 T)  thing = [three_to_five<tstr>]"#;
+    validate_json_str("thing", cddl_input, r#"["one", "two"]"#).err_mismatch();
+    validate_json_str("thing", cddl_input, r#"["one", "two", "three"]"#).unwrap();
+    validate_json_str("thing", cddl_input, r#"["one", "two", "three", "four"]"#).unwrap();
+    validate_json_str("thing", cddl_input, r#"["1st","2nd","3rd","4th","5th"]"#).unwrap();
+    validate_json_str("thing", cddl_input, r#"["a","b","c","d","e","f"]"#).err_mismatch();
+}
+
+#[test]
+fn json_generic_socket_example() {
+    // TODO: use e.g. "bstr .size 4" once the .size control operator
+    // is supported.
+    let cddl_input = r#"
+        port = uint
+        socket_addr<HOST> = (HOST, port)
+        hostname = tstr
+        ipv4_addr = [uint, uint, uint, uint]
+        ipv4_host = hostname / ipv4_addr
+        ipv4_socket = socket_addr<ipv4_host>
+        sock_struct = { name: tstr, sock: [ipv4_socket]}
+    "#;
+    validate_json_str(
+        "sock_struct",
+        cddl_input,
+        r#" { "name": "foo", "sock": ["foo.dev", 8080]} "#,
+    )
+    .unwrap();
+    validate_json_str(
+        "sock_struct",
+        cddl_input,
+        r#" { "name": "foo", "sock": [[10,0,0,1], 8080]} "#,
+    )
+    .unwrap();
+}
+
+#[test]
+fn json_generic_name_overlap() {
+    let cddl_input = r#"
+        IP = [uint, uint, uint, uint]
+        PORT = uint
+        socket = [IP, PORT]
+        name = tstr
+        conn<IP> = [name, socket, IP] ; This is the generic parameter named IP
+        iptype = "v4" / "v6"
+        thing = conn<iptype>          ; This is the rule named IP
+    "#;
+    validate_json_str("thing", cddl_input, r#"["foo", [[10,0,0,1], 8080], "v4"]"#).unwrap();
+}
+
+#[test]
+fn json_generic_nested() {
+    let cddl_input = r#"
+        double<X> = (X, X)
+        triple<Y> = (Y, Y, Y)
+        sextuple<Z> = double<triple<Z>>
+        thing = [sextuple<int>]
+    "#;
+    validate_json_str("thing", cddl_input, "[1, 2, 3, 4, 5, 6]").unwrap();
+    validate_json_str("thing", cddl_input, "[[1, 2, 3], [4, 5, 6]]").err_mismatch();
+    validate_json_str("thing", cddl_input, "[1, 2, 3, 4, 5]").err_mismatch();
+    validate_json_str("thing", cddl_input, "[1, 2, 3, 4, 5, 6, 7]").err_mismatch();
+
+    // Check to see if we get confused when the same generic parameter name
+    // gets used across multiple levels.
+    let cddl_input = r#"
+        double<T> = (T, T)
+        triple<T> = (T, T, T)
+        sextuple<T> = double<triple<T>>
+        thing = [sextuple<int>]
+    "#;
+    validate_json_str("thing", cddl_input, "[1, 2, 3, 4, 5, 6]").unwrap();
+
+    // Verify that we can't access generic names in places we shouldn't.
+    let cddl_input = r#"
+        double<X> = (X, X)
+        triple<Y> = (X, Y, Y)
+        sextuple<Z> = double<triple<Z>>
+        thing = [sextuple<int>]
+    "#;
+    validate_json_str("thing", cddl_input, "[1, 2, 3, 4, 5, 6]").err_missing_rule();
+
+    let cddl_input = r#"
+        double<X> = (X, X)
+        triple<Y> = (Z, Y, Y)
+        sextuple<Z> = double<triple<Z>>
+        thing = [sextuple<int>]
+    "#;
+    validate_json_str("thing", cddl_input, "[1, 2, 3, 4, 5, 6]").err_missing_rule();
+}
+
+#[test]
+fn json_generic_rfc8610() {
+    // Generic examples from RFC8610
+    let cddl_input = r#"
+        messages = message<"reboot", "now"> / message<"sleep", 1..100>
+        message<t, v> = {type: t, value: v}
+    "#;
+    validate_json_str("messages", cddl_input, r#"{"type":"reboot","value":"now"}"#).unwrap();
+    validate_json_str("messages", cddl_input, r#"{"type":"sleep", "value":15}"#).unwrap();
+    validate_json_str("messages", cddl_input, r#"{"type":"no", "value": "now"}"#).err_mismatch();
+    validate_json_str("messages", cddl_input, r#"{"type":"sleep", "value":150}"#).err_mismatch();
+}
+
+#[test]
+fn json_generic_malformed() {
+    // Obviously bad rule lookup
+    let cddl_input = r#"double<T> = (T, T) thing = [T, double<int>]"#;
+    validate_json_str("thing", cddl_input, "[1, 2, 3]").err_missing_rule();
+
+    // Missing parameters
+    let cddl_input = r#"double<T> = (T, T) thing = [double]"#;
+    validate_json_str("thing", cddl_input, "[1, 2]").err_generic();
+
+    // Wrong number of parameters
+    let cddl_input = r#"pair<T, U> = (T, U) thing = [pair<int>]"#;
+    validate_json_str("thing", cddl_input, "[1, 2]").err_generic();
+    let cddl_input = r#"pair<T, U> = (T, U) thing = [pair<int, int, int>]"#;
+    validate_json_str("thing", cddl_input, "[1, 2]").err_generic();
 }

@@ -25,10 +25,10 @@
 //!   a generic form, so most of the validation code is completely agnostic
 //!   to the serialization format.
 //!
-//! - Validation code uses a [`Context`] object to perform all rule lookups.
+//! - Validation code uses a [`LookupContext`] object to perform all rule lookups.
 //!   This will allow stacking CDDL documents or building CDDL libraries that
 //!   can be used by other CDDL schemas.  In the future the validation process
-//!   itself may be customized by changing the `Context` configuration.
+//!   itself may be customized by changing the `LookupContext` configuration.
 //!
 //! # Examples
 //!
@@ -111,7 +111,7 @@
 //! - Prelude types that invoke CBOR tags (e.g. `tdate` or `biguint`)
 //!
 //! [`Node`]: ivt::Node
-//! [`Context`]: context::Context
+//! [`LookupContext`]: context::LookupContext
 //! [RFC8610]: https://tools.ietf.org/html/rfc8610
 //! [CBOR]: https://cbor.io/
 

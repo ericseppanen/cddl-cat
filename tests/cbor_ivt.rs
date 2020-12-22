@@ -1,7 +1,7 @@
 #![cfg(feature = "serde_cbor")]
 
 use cddl_cat::cbor::validate_cbor;
-use cddl_cat::context::{tests::DummyContext, BasicContext, RulesByName};
+use cddl_cat::context::{tests::DummyContext, BasicContext};
 use cddl_cat::ivt::*;
 use cddl_cat::util::ValidateResult;
 use serde::ser::Serialize;
@@ -27,7 +27,11 @@ impl TestValidate for Value {
     fn test_validate(&self, node: &Node) -> ValidateResult {
         // We don't need to do any Rule lookups, so an empty Context will do.
         let ctx = DummyContext::new();
-        validate_cbor(node, self, &ctx)
+        let rule_def = RuleDef {
+            node: node.clone(),
+            generic_parms: Vec::new(),
+        };
+        validate_cbor(&rule_def, self, &ctx)
     }
 }
 
@@ -123,9 +127,21 @@ fn validate_map() {
 #[test]
 fn validate_rule_ref() {
     let mut rules = RulesByName::new();
-    rules.insert("seven".to_string(), LITERAL_7.clone());
+    rules.insert(
+        "seven".to_string(),
+        RuleDef {
+            generic_parms: Vec::new(),
+            node: LITERAL_7.clone(),
+        },
+    );
+
     let ctx = BasicContext::new(rules);
-    let node2 = &Node::Rule(Rule::new_name("seven"));
-    validate_cbor(node2, &gen_value(7), &ctx).unwrap();
-    validate_cbor(node2, &gen_value(8), &ctx).unwrap_err();
+    let node = Node::Rule(Rule::new_name("seven"));
+    let rule_def = RuleDef {
+        node,
+        generic_parms: Vec::new(),
+    };
+
+    validate_cbor(&rule_def, &gen_value(7), &ctx).unwrap();
+    validate_cbor(&rule_def, &gen_value(8), &ctx).unwrap_err();
 }

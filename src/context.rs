@@ -1,28 +1,24 @@
-//! This module defines the Context trait.
+//! This module defines the LookupContext trait.
 //!
-//! A [`Context`] is used to specify runtime behavior for validation.
+//! A [`LookupContext`] is used to specify runtime behavior for validation.
 //! When a validation needs to resolve a rule reference, it will ask the
-//! `Context` to perform the name resolution.
+//! `LookupContext` to perform the name resolution.
 //!
 
-use crate::ivt::Node;
+use crate::ivt::{RuleDef, RulesByName};
 use crate::util::ValidateError;
-use std::collections::BTreeMap;
 
-/// This type is used in BasicContext to perform rule lookups.
-pub type RulesByName = BTreeMap<String, Node>;
+// The Node reference lives as long as the LookupContext does.
+type LookupResult<'a> = Result<&'a RuleDef, ValidateError>;
 
-// The Node reference lives as long as the Context does.
-type LookupResult<'a> = Result<&'a Node, ValidateError>;
-
-/// A Context contains any external information required for validation.
+/// A LookupContext contains any external information required for validation.
 ///
 /// Right now, that only includes a function that understands how to resolve
 /// a name reference to an [`ivt::Rule`].
 ///
 /// [`ivt::Rule`]: crate::ivt::Rule
 
-pub trait Context {
+pub trait LookupContext {
     /// Lookup a rule by name.
     fn lookup_rule<'a>(&'a self, name: &str) -> LookupResult<'a>;
 }
@@ -40,10 +36,10 @@ impl BasicContext {
     }
 }
 
-impl Context for BasicContext {
+impl LookupContext for BasicContext {
     fn lookup_rule<'a>(&'a self, name: &str) -> LookupResult<'a> {
         match self.rules.get(name) {
-            Some(node) => Ok(node),
+            Some(rule_def) => Ok(&rule_def),
             None => Err(ValidateError::MissingRule(name.into())),
         }
     }
@@ -52,9 +48,9 @@ impl Context for BasicContext {
 #[doc(hidden)] // Only pub for integration tests
 #[allow(missing_docs)]
 pub mod tests {
-    use super::{Context, LookupResult, ValidateError};
+    use super::*;
 
-    /// A [Context] that fails all rule lookups
+    /// A `LookupContext` that fails all rule lookups
     pub struct DummyContext {}
 
     impl DummyContext {
@@ -64,7 +60,7 @@ pub mod tests {
         }
     }
 
-    impl Context for DummyContext {
+    impl LookupContext for DummyContext {
         fn lookup_rule<'a>(&'a self, name: &str) -> LookupResult<'a> {
             Err(ValidateError::MissingRule(name.into()))
         }

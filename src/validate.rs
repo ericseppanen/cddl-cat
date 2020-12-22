@@ -2,13 +2,154 @@
 //!
 //! More precisely, it validates data that can be represented by [`Value`] trees.
 
-use crate::context::Context;
+use crate::context::LookupContext;
 use crate::ivt::*;
 use crate::util::{mismatch, ValidateError, ValidateResult};
 use crate::value::Value;
 use std::collections::BTreeMap; // used in Value::Map
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::mem::discriminant;
+
+// A map from generic parameter name to the type being used here.
+#[derive(Clone, Debug)]
+struct GenericMap<'a> {
+    map: HashMap<String, &'a Node>,
+    // Because we captured this map at a previous time, we may need to look up
+    // generic types from that previous context.  We carry a copy of that
+    // Context with us to do those lookups.
+    past_ctx: Option<&'a Context<'a>>,
+}
+
+// At the top level of a validation, we won't have any past_ctx
+// because there cannot be any generic parameter map.
+impl Default for GenericMap<'_> {
+    fn default() -> Self {
+        Self {
+            map: HashMap::default(),
+            past_ctx: None,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct Context<'a> {
+    lookup: &'a dyn LookupContext,
+    generic_map: GenericMap<'a>,
+}
+
+impl std::fmt::Debug for Context<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Context")
+            .field("generic_map", &self.generic_map)
+            .finish()
+    }
+}
+
+struct NodeContext<'a> {
+    node: &'a Node,
+    ctx: Context<'a>,
+}
+
+impl<'a> Context<'a> {
+    // `lookup_rule` will first do a search for a local generic parameter name
+    // first, followed by a lookup for a rule by that name.
+
+    // To give an example:
+    //     IP = [u8, u8, u8, u8]
+    //     PORT = u16
+    //     socket = [IP, PORT]
+    //     conn<IP> = [name, socket, IP] # This is the generic parm IP not the rule IP.
+    //
+    // While validating "conn" we have a Context with a generic mapping for "IP".
+    // As soon as we traverse into "socket", we need for there to be a new context,
+    // where no "IP" exists (so we'll do the rule lookup instead).
+    //
+    fn lookup_rule(&'a self, rule: &'a Rule) -> TempResult<NodeContext<'a>> {
+        // First, check to see if the "rule name" is actually a generic parameter.
+        // TODO: this would be a lot easier if this were pre-processed by the flattener
+        // so that "rule lookup" and "generic type lookup" were two separate Node variants.
+        let generic_node: Option<&'a Node> = self.generic_map.map.get(&rule.name).cloned();
+        if let Some(node) = generic_node {
+            // If we stored a past_ctx along with the generic args, then pass that
+            // context along with the node that is substituting for this generic
+            // parameter name.  Otherwise, return a new blank Context.
+            let ctx = self.generic_map.past_ctx.cloned().unwrap_or(self.blank());
+            return Ok(NodeContext {
+                node: node,
+                ctx: ctx,
+            });
+        }
+
+        let rule_def: &RuleDef = self.lookup.lookup_rule(&rule.name)?;
+
+        // Create a new context containing a new generic parameter map.
+        let ctx = self.derive(rule_def, rule)?;
+
+        Ok(NodeContext {
+            node: &rule_def.node,
+            ctx,
+        })
+    }
+
+    // Create a new blank Context (with no parameter map)
+    fn blank(&self) -> Context<'a> {
+        Context {
+            lookup: self.lookup,
+            generic_map: GenericMap::default(),
+        }
+    }
+
+    // Create a new Context, with optional generic parameter map.
+    fn derive(&'a self, rule_def: &'a RuleDef, rule: &'a Rule) -> TempResult<Context<'a>> {
+        let parms_len = rule_def.generic_parms.len();
+        let args_len = rule.generic_args.len();
+        if parms_len != args_len {
+            // Wrong number of generic arguments
+            return Err(ValidateError::GenericError);
+        }
+
+        // Zip the two Vecs:
+        // 1. rule_def.generic_parms
+        // 2. rule.generic_args
+        // and put them into a HashMap so we can do lookups from parm -> arg.
+        let map: HashMap<String, &'a Node> = rule_def
+            .generic_parms
+            .iter()
+            .cloned()
+            .zip(rule.generic_args.iter())
+            .collect();
+
+        let generic_map = GenericMap {
+            map,
+            past_ctx: Some(self),
+        };
+
+        Ok(Context {
+            lookup: self.lookup,
+            generic_map,
+        })
+    }
+}
+
+pub(crate) fn do_validate(
+    value: &Value,
+    rule_def: &RuleDef,
+    ctx: &dyn LookupContext,
+) -> ValidateResult {
+    // If the rule_def passed in requires generic parameters, we should
+    // return an error, because we don't have any way to specify them.
+    if !rule_def.generic_parms.is_empty() {
+        return Err(ValidateError::GenericError);
+    }
+
+    let ctx = Context {
+        lookup: ctx,
+        generic_map: GenericMap::default(),
+    };
+    let node = &rule_def.node;
+    validate(value, node, &ctx)
+}
 
 type ValueMap = BTreeMap<Value, Value>;
 
@@ -166,7 +307,7 @@ impl WorkingArray {
 
 // This is the main validation dispatch function.
 // It tries to match a Node and a Value, recursing as needed.
-pub(crate) fn validate(value: &Value, node: &Node, ctx: &dyn Context) -> ValidateResult {
+fn validate(value: &Value, node: &Node, ctx: &Context) -> ValidateResult {
     match node {
         Node::Literal(l) => validate_literal(l, value),
         Node::PreludeType(p) => validate_prelude_type(*p, value),
@@ -188,7 +329,7 @@ pub(crate) fn validate(value: &Value, node: &Node, ctx: &dyn Context) -> Validat
 fn validate_map_key<'a>(
     value_map: &'a mut WorkingMap,
     node: &Node,
-    ctx: &dyn Context,
+    ctx: &Context,
 ) -> TempResult<(Value, &'a Value)> {
     match node {
         Node::Literal(l) => map_search_literal(l, value_map),
@@ -199,7 +340,7 @@ fn validate_map_key<'a>(
 /// Validate a `Choice` containing an arbitrary number of "option" nodes.
 ///
 /// If any of the options matches, this validation is successful.
-pub fn validate_choice(choice: &Choice, value: &Value, ctx: &dyn Context) -> ValidateResult {
+fn validate_choice(choice: &Choice, value: &Value, ctx: &Context) -> ValidateResult {
     for node in &choice.options {
         match validate(value, node, ctx) {
             Ok(()) => {
@@ -220,10 +361,10 @@ pub fn validate_choice(choice: &Choice, value: &Value, ctx: &dyn Context) -> Val
 
 /// Validate a `Rule` reference
 ///
-/// This just falls through to the referenced `Node`.
-pub fn validate_rule(rule: &Rule, value: &Value, ctx: &dyn Context) -> ValidateResult {
-    let node = ctx.lookup_rule(&rule.name)?;
-    validate(value, &node, ctx)
+/// Seek out the right `Node` and `Context`, and recurse.
+fn validate_rule(rule: &Rule, value: &Value, ctx: &Context) -> ValidateResult {
+    let answer = ctx.lookup_rule(&rule)?;
+    validate(value, &answer.node, &answer.ctx)
 }
 
 /// Create a `Value` from a `Literal`.
@@ -267,7 +408,7 @@ fn map_search_literal<'a>(
 fn map_search<'a>(
     node: &Node,
     working_map: &'a mut WorkingMap,
-    ctx: &dyn Context,
+    ctx: &Context,
 ) -> TempResult<(Value, &'a Value)> {
     for (key, value) in working_map.map.iter() {
         let attempt = validate(key, node, ctx);
@@ -303,14 +444,14 @@ fn validate_prelude_type(ty: PreludeType, value: &Value) -> ValidateResult {
 }
 
 // FIXME: should this be combined with Map handling?
-fn validate_array(ar: &Array, value: &Value, ctx: &dyn Context) -> ValidateResult {
+fn validate_array(ar: &Array, value: &Value, ctx: &Context) -> ValidateResult {
     match value {
         Value::Array(a) => validate_array_part2(ar, a, ctx),
         _ => Err(mismatch("array")),
     }
 }
 
-fn validate_array_part2(ar: &Array, value_array: &[Value], ctx: &dyn Context) -> ValidateResult {
+fn validate_array_part2(ar: &Array, value_array: &[Value], ctx: &Context) -> ValidateResult {
     // Strategy for validating an array:
     // 1. We assume that the code that constructed the IVT Array placed the
     //    members in matching order (literals first, more general types at the
@@ -346,7 +487,7 @@ fn validate_array_part2(ar: &Array, value_array: &[Value], ctx: &dyn Context) ->
 fn validate_array_member(
     member: &Node,
     working_array: &mut WorkingArray,
-    ctx: &dyn Context,
+    ctx: &Context,
 ) -> ValidateResult {
     match member {
         // FIXME: does it make sense for this to destructure & dispatch
@@ -365,15 +506,16 @@ fn validate_array_member(
             // through" KeyValue and Group nodes while remembering that we are
             // in an array context (with a particular working copy).
             // BUG: Choice nodes will have the same problem.
-            let next_node = ctx.lookup_rule(&r.name)?;
-            validate_array_member(next_node, working_array, ctx)
+
+            let answer = ctx.lookup_rule(r)?;
+            validate_array_member(&answer.node, working_array, &answer.ctx)
         }
         Node::Unwrap(r) => {
             // Like Rule, we are dereferencing the Rule by hand here so that
             // we can "see through" to the underlying data without forgetting
             // we were in an array context.
-            let node = ctx.lookup_rule(&r.name)?;
-            validate_array_unwrap(node, working_array, ctx)
+            let answer = ctx.lookup_rule(r)?;
+            validate_array_unwrap(&answer.node, working_array, &answer.ctx)
         }
         Node::Choice(c) => {
             // We need to explore each of the possible choices.
@@ -431,7 +573,7 @@ fn validate_array_member(
 fn validate_array_unwrap(
     node: &Node,
     working_array: &mut WorkingArray,
-    ctx: &dyn Context,
+    ctx: &Context,
 ) -> ValidateResult {
     // After traversing an unwrap from inside an array, the next node must be an
     // Array node too.
@@ -453,7 +595,7 @@ fn validate_array_unwrap(
 fn validate_array_occur(
     occur: &Occur,
     working_array: &mut WorkingArray,
-    ctx: &dyn Context,
+    ctx: &Context,
 ) -> ValidateResult {
     let (lower_limit, upper_limit) = occur.limits();
     let mut count: usize = 0;
@@ -488,7 +630,7 @@ fn validate_array_occur(
 fn validate_array_value(
     node: &Node,
     working_array: &mut WorkingArray,
-    ctx: &dyn Context,
+    ctx: &Context,
 ) -> ValidateResult {
     match working_array.peek_front() {
         Some(val) => {
@@ -501,14 +643,14 @@ fn validate_array_value(
     }
 }
 
-fn validate_map(m: &Map, value: &Value, ctx: &dyn Context) -> ValidateResult {
+fn validate_map(m: &Map, value: &Value, ctx: &Context) -> ValidateResult {
     match value {
         Value::Map(vm) => validate_map_part2(m, vm, ctx),
         _ => Err(mismatch("map")),
     }
 }
 
-fn validate_map_part2(m: &Map, value_map: &ValueMap, ctx: &dyn Context) -> ValidateResult {
+fn validate_map_part2(m: &Map, value_map: &ValueMap, ctx: &Context) -> ValidateResult {
     // Strategy for validating a map:
     // 1. We assume that the code that constructed the IVT Map placed the keys
     //    in matching order (literals first, more general types at the end) so
@@ -545,7 +687,7 @@ fn validate_map_part2(m: &Map, value_map: &ValueMap, ctx: &dyn Context) -> Valid
 fn validate_map_member(
     member: &Node,
     working_map: &mut WorkingMap,
-    ctx: &dyn Context,
+    ctx: &Context,
 ) -> ValidateResult {
     match member {
         // FIXME: does it make sense for this to destructure & dispatch
@@ -556,15 +698,15 @@ fn validate_map_member(
             // We can't use the generic validate() here; we would forget that
             // we were in a map context.  We need to punch down a level into
             // the rule and match again.
-            let next_node = ctx.lookup_rule(&r.name)?;
-            validate_map_member(next_node, working_map, ctx)
+            let answer = ctx.lookup_rule(r)?;
+            validate_map_member(&answer.node, working_map, &answer.ctx)
         }
         Node::Unwrap(r) => {
             // Like Rule, we are dereferencing the Rule by hand here so that
             // we can "see through" to the underlying data without forgetting
             // we were in a map context.
-            let node = ctx.lookup_rule(&r.name)?;
-            validate_map_unwrap(node, working_map, ctx)
+            let answer = ctx.lookup_rule(r)?;
+            validate_map_unwrap(&answer.node, working_map, &answer.ctx)
         }
         Node::Group(g) => {
             // As we call validate_array_member, we don't know how many items
@@ -627,11 +769,7 @@ fn validate_map_member(
     }
 }
 
-fn validate_map_unwrap(
-    node: &Node,
-    working_map: &mut WorkingMap,
-    ctx: &dyn Context,
-) -> ValidateResult {
+fn validate_map_unwrap(node: &Node, working_map: &mut WorkingMap, ctx: &Context) -> ValidateResult {
     // After traversing an unwrap from inside a map, the next node must be a
     // Map node too.
     match node {
@@ -651,7 +789,7 @@ fn validate_map_unwrap(
 fn validate_map_occur(
     occur: &Occur,
     working_map: &mut WorkingMap,
-    ctx: &dyn Context,
+    ctx: &Context,
 ) -> ValidateResult {
     let (lower_limit, upper_limit) = occur.limits();
     let mut count: usize = 0;
@@ -689,7 +827,7 @@ fn validate_map_occur(
 fn validate_map_keyvalue(
     kv: &KeyValue,
     working_map: &mut WorkingMap,
-    ctx: &dyn Context,
+    ctx: &Context,
 ) -> ValidateResult {
     // CDDL syntax reminder:
     //   a => b   ; non-cut
@@ -728,7 +866,7 @@ fn validate_map_keyvalue(
     }
 }
 
-fn validate_standalone_group(g: &Group, value: &Value, ctx: &dyn Context) -> ValidateResult {
+fn validate_standalone_group(g: &Group, value: &Value, ctx: &Context) -> ValidateResult {
     // Since we're not in an array or map context, it's not clear how we should
     // validate a group containing multiple elements.  If we see one, return an
     // error.
@@ -741,10 +879,13 @@ fn validate_standalone_group(g: &Group, value: &Value, ctx: &dyn Context) -> Val
     }
 }
 
-fn deref_range_rule(node: &Node, ctx: &dyn Context) -> TempResult<Literal> {
+fn deref_range_rule(node: &Node, ctx: &Context) -> TempResult<Literal> {
     match node {
         Node::Literal(l) => Ok(l.clone()),
-        Node::Rule(r) => deref_range_rule(ctx.lookup_rule(&r.name)?, ctx),
+        Node::Rule(r) => {
+            let answer = ctx.lookup_rule(r)?;
+            deref_range_rule(&answer.node, &answer.ctx)
+        }
         _ => Err(ValidateError::Structural(
             "confusing type on range operator".into(),
         )),
@@ -763,7 +904,7 @@ fn check_range<T: PartialOrd>(start: T, end: T, value: T, inclusive: bool) -> bo
     }
 }
 
-fn validate_range(range: &Range, value: &Value, ctx: &dyn Context) -> ValidateResult {
+fn validate_range(range: &Range, value: &Value, ctx: &Context) -> ValidateResult {
     // first dereference rules on start and end, if necessary.
     let start = deref_range_rule(&range.start, ctx)?;
     let end = deref_range_rule(&range.end, ctx)?;

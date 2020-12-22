@@ -11,24 +11,18 @@ use crate::ast;
 use crate::ivt::*;
 use crate::parser::{parse_cddl, slice_parse_cddl};
 use crate::util::ValidateError;
-use std::collections::BTreeMap;
 use std::convert::TryInto;
-
-// The type used to return a {name: rule} tree
-type RulesByName = BTreeMap<String, Node>;
-
-type RulesWithStrings = BTreeMap<String, (Node, String)>;
 
 /// The result of a flatten operation.
 pub type FlattenResult<T> = std::result::Result<T, ValidateError>;
 
-/// Convert a CDDL schema in UTF-8 form into a `(name, rule)` map.
+/// Convert a CDDL schema in UTF-8 form into a structured rule set.
 pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
     let cddl = parse_cddl(cddl_input).map_err(ValidateError::ParseError)?;
     flatten(&cddl)
 }
 
-/// Convert a CDDL schema in UTF-8 form into a `(name, (rule, rule-string))` map.
+/// Convert a CDDL schema in UTF-8 form into a structured rule set, preserving the CDDL text.
 ///
 /// This works the same as `flatten_from_str`, but preserves a copy of the original
 /// CDDL text alongside the IVT.
@@ -63,13 +57,17 @@ pub fn slice_flatten(cddl: &ast::CddlSlice) -> FlattenResult<RulesWithStrings> {
 ///
 /// Returns (name, node) where the name is the name of the rule (which may
 /// be referenced in other places.
-fn flatten_rule(rule: &ast::Rule) -> FlattenResult<(String, Node)> {
+fn flatten_rule(rule: &ast::Rule) -> FlattenResult<(String, RuleDef)> {
     use ast::RuleVal;
     let node = match &rule.val {
         RuleVal::AssignType(t) => flatten_type(&t)?,
         RuleVal::AssignGroup(g) => flatten_groupentry(&g)?,
     };
-    Ok((rule.name.clone(), node))
+    let ruledef = RuleDef {
+        generic_parms: rule.generic_parms.clone(),
+        node,
+    };
+    Ok((rule.name.clone(), ruledef))
 }
 
 fn flatten_type(ty: &ast::Type) -> FlattenResult<Node> {
@@ -419,6 +417,7 @@ fn flatten_memberkey(memberkey: &ast::MemberKey) -> FlattenResult<Node> {
 #[macro_use]
 mod test_utils {
     use super::*;
+    use std::collections::BTreeMap;
 
     // Given a string, generate a rule reference.
     impl From<&str> for Rule {
@@ -437,15 +436,41 @@ mod test_utils {
         }
     }
 
+    // Given a Node (with no generic parameters), generate a RuleDef.
+    impl From<Node> for RuleDef {
+        fn from(n: Node) -> Self {
+            RuleDef {
+                generic_parms: Vec::default(),
+                node: n,
+            }
+        }
+    }
+
     // Given a list of names and Nodes, build a rules map.
     pub fn make_rules(mut list: Vec<(&str, Node)>) -> RulesByName {
-        list.drain(..).map(|(s, n)| (s.to_string(), n)).collect()
+        list.drain(..)
+            .map(|(s, n)| (s.to_string(), RuleDef::from(n)))
+            .collect()
     }
 
     // Given a single name/Node pair, build a rules map.
     pub fn make_rule(name: &str, node: Node) -> RulesByName {
         let mut result = BTreeMap::new();
-        result.insert(name.to_string(), node);
+        result.insert(name.to_string(), RuleDef::from(node));
+        result
+    }
+
+    // Given a single name/Node pair, build a rules map.
+    pub fn make_generic_rule(name: &str, generic_parms: &[&str], node: Node) -> RulesByName {
+        let mut result = BTreeMap::new();
+        let generic_parms: Vec<String> = generic_parms.iter().map(|s| String::from(*s)).collect();
+        result.insert(
+            name.to_string(),
+            RuleDef {
+                generic_parms,
+                node,
+            },
+        );
         result
     }
 
@@ -458,6 +483,13 @@ mod test_utils {
     impl CreateLiteral for &str {
         fn literal(self) -> Node {
             Node::Literal(Literal::Text(self.to_string()))
+        }
+    }
+
+    // Create a literal integer.
+    impl CreateLiteral for u64 {
+        fn literal(self) -> Node {
+            Node::Literal(Literal::Int(self.into()))
         }
     }
 
@@ -565,24 +597,24 @@ mod tests {
     fn test_flatten_literal_int() {
         let cddl_input = r#"thing = 1"#;
         let result = flatten_from_str(cddl_input).unwrap();
-        let result = format!("{:?}", result);
-        assert_eq!(result, r#"{"thing": Literal(Int(1))}"#);
+        let expected = make_rule("thing", 1.literal());
+        assert_eq!(result, expected);
     }
 
     #[test]
     fn test_flatten_literal_tstr() {
         let cddl_input = r#"thing = "abc""#;
         let result = flatten_from_str(cddl_input).unwrap();
-        let result = format!("{:?}", result);
-        assert_eq!(result, r#"{"thing": Literal(Text("abc"))}"#);
+        let expected = make_rule("thing", "abc".literal());
+        assert_eq!(result, expected);
     }
 
     #[test]
     fn test_flatten_prelude_reference() {
         let cddl_input = r#"thing = int"#;
         let result = flatten_from_str(cddl_input).unwrap();
-        let result = format!("{:?}", result);
-        assert_eq!(result, r#"{"thing": PreludeType(Int)}"#);
+        let expected = make_rule("thing", Node::PreludeType(PreludeType::Int));
+        assert_eq!(result, expected);
     }
 
     #[test]
@@ -628,11 +660,9 @@ mod tests {
     fn test_flatten_generic() {
         let cddl_input = "message<t, v> = [t, v]";
         let result = flatten_from_str(cddl_input).unwrap();
-        //
-        // FIXME: this is missing the left-hand side: the generic_parms <t, v> are missing.
-        //
-        let expected = make_rule(
+        let expected = make_generic_rule(
             "message",
+            &["t", "v"],
             make_array()
                 .append(Rule::from("t"))
                 .append(Rule::from("v"))

@@ -47,20 +47,20 @@
 //! // Create a Context object to store the IVT
 //! let ctx = BasicContext::new(flat_cddl);
 //! // Look up the Rule we want to validate.
-//! let rule_node = ctx.rules.get("person").unwrap();
+//! let rule_def = &ctx.rules.get("person").unwrap();
 //! // Deserialize the CBOR bytes
 //! let cbor_value = serde_cbor::from_slice(&cbor_bytes).unwrap();
 //! // Perform the validation.
-//! validate_cbor(&rule_node, &cbor_value, &ctx).unwrap();
+//! validate_cbor(&rule_def, &cbor_value, &ctx).unwrap();
 //! ```
 
 #![cfg(feature = "serde_cbor")]
 
-use crate::context::{BasicContext, Context};
+use crate::context::{BasicContext, LookupContext};
 use crate::flatten::flatten_from_str;
-use crate::ivt::Node;
+use crate::ivt::RuleDef;
 use crate::util::{ValidateError, ValidateResult};
-use crate::validate::validate;
+use crate::validate::do_validate;
 use crate::value::Value;
 use serde_cbor::Value as CBOR_Value;
 use std::collections::BTreeMap;
@@ -119,9 +119,13 @@ impl TryFrom<CBOR_Value> for Value {
 }
 
 /// Validate already-parsed CBOR data against an already-parsed CDDL schema.
-pub fn validate_cbor(node: &Node, value: &CBOR_Value, ctx: &dyn Context) -> ValidateResult {
+pub fn validate_cbor(
+    rule_def: &RuleDef,
+    value: &CBOR_Value,
+    ctx: &dyn LookupContext,
+) -> ValidateResult {
     let value = Value::try_from(value)?;
-    validate(&value, node, ctx)
+    do_validate(&value, rule_def, ctx)
 }
 
 /// Validate CBOR-encoded data against a specified rule in a UTF-8 CDDL schema.
@@ -131,7 +135,7 @@ pub fn validate_cbor_bytes(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResul
     let ctx = BasicContext::new(flat_cddl);
 
     // Find the rule name that was requested
-    let rule_node: &Node = ctx
+    let rule_def: &RuleDef = ctx
         .rules
         .get(name)
         .ok_or_else(|| ValidateError::MissingRule(name.into()))?;
@@ -142,5 +146,5 @@ pub fn validate_cbor_bytes(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResul
 
     // Convert the CBOR tree into a Value tree for validation
     let value = Value::try_from(cbor_value)?;
-    validate(&value, rule_node, &ctx)
+    do_validate(&value, rule_def, &ctx)
 }

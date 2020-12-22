@@ -7,8 +7,36 @@
 //! CBOR or JSON), but it helps make writing those validators easier.
 
 use crate::ast;
+use std::collections::BTreeMap;
 use std::fmt;
 use strum_macros::{Display, IntoStaticStr};
+
+/// The definition of a CDDL rule.
+///
+/// Each rule has a name, some (optional) generic parameters, and a
+/// definition `Node`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct RuleDef {
+    /// Optional generic parameters.
+    pub generic_parms: Vec<String>,
+    /// The Node representing the rule definition.
+    pub node: Node,
+}
+
+/// A set of CDDL rules.
+///
+/// Each rule has a name, some (optional) generic parameters, and a
+/// definition `Node`.
+pub type RulesByName = BTreeMap<String, RuleDef>;
+
+/// A set of CDDL rules.
+///
+/// Each rule has a name, some (optional) generic parameters, and a
+/// definition `Node`.
+///
+/// `RulesWithStrings` is exactly like `RulesByName`, except that it
+/// preserves the original CDDL text for the rule, to assist in debugging.
+pub type RulesWithStrings = BTreeMap<String, (RuleDef, String)>;
 
 /// One of the types named in the CDDL prelude.
 ///

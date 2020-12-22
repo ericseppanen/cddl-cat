@@ -14,11 +14,11 @@
 
 #![cfg(feature = "serde_json")]
 
-use crate::context::{BasicContext, Context};
+use crate::context::{BasicContext, LookupContext};
 use crate::flatten::flatten_from_str;
-use crate::ivt::Node;
+use crate::ivt::RuleDef;
 use crate::util::{ValidateError, ValidateResult};
-use crate::validate::validate;
+use crate::validate::do_validate;
 use crate::value::Value;
 use serde_json::Value as JSON_Value;
 use std::collections::BTreeMap;
@@ -79,9 +79,13 @@ impl TryFrom<JSON_Value> for Value {
 }
 
 /// Validate already-parsed JSON data against an already-parsed CDDL schema.
-pub fn validate_json(node: &Node, value: &JSON_Value, ctx: &dyn Context) -> ValidateResult {
+pub fn validate_json(
+    rule_def: &RuleDef,
+    value: &JSON_Value,
+    ctx: &dyn LookupContext,
+) -> ValidateResult {
     let value = Value::try_from(value)?;
-    validate(&value, node, ctx)
+    do_validate(&value, rule_def, ctx)
 }
 
 /// Validate JSON-encoded data against a specified rule in a UTF-8 CDDL schema.
@@ -90,8 +94,8 @@ pub fn validate_json_str(name: &str, cddl: &str, json: &str) -> ValidateResult {
     let flat_cddl = flatten_from_str(cddl)?;
     let ctx = BasicContext::new(flat_cddl);
 
-    // Find the rule name that was requested
-    let rule_node: &Node = ctx
+    // Find the rule definition that was requested
+    let rule_def: &RuleDef = ctx
         .rules
         .get(name)
         .ok_or_else(|| ValidateError::MissingRule(name.into()))?;
@@ -102,7 +106,7 @@ pub fn validate_json_str(name: &str, cddl: &str, json: &str) -> ValidateResult {
 
     // Convert the JSON tree into a Value tree for validation
     let value = Value::try_from(json_value)?;
-    validate(&value, rule_node, &ctx)
+    do_validate(&value, rule_def, &ctx)
 }
 
 #[cfg(test)]

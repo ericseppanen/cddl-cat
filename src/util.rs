@@ -103,3 +103,35 @@ impl error::Error for ValidateError {
 
 /// A validation that doesn't return anything.
 pub type ValidateResult = Result<(), ValidateError>;
+
+// Some utility functions that are helpful when testing whether the right
+// error was returned.
+#[doc(hidden)]
+pub trait ErrorMatch {
+    fn err_mismatch(&self) -> ();
+    fn err_missing_rule(&self) -> ();
+    fn err_generic(&self) -> ();
+}
+
+impl ErrorMatch for ValidateResult {
+    #[track_caller]
+    fn err_mismatch(&self) -> () {
+        if !matches!(self, Err(ValidateError::Mismatch(_))) {
+            panic!("expected Mismatch, got {:?}", self);
+        }
+    }
+
+    #[track_caller]
+    fn err_missing_rule(&self) -> () {
+        if !matches!(self, Err(ValidateError::MissingRule(_))) {
+            panic!("expected MissingRule, got {:?}", self);
+        }
+    }
+
+    #[track_caller]
+    fn err_generic(&self) -> () {
+        if !matches!(self, Err(ValidateError::GenericError)) {
+            panic!("expected GenericError, got {:?}", self);
+        }
+    }
+}
