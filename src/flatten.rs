@@ -94,15 +94,6 @@ fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
     }
 }
 
-// This is a temporary crutch until generic parameters are supported.
-fn ignore_generic_arg(name_generic: &ast::NameGeneric) -> FlattenResult<&str> {
-    if name_generic.generic_args.is_empty() {
-        Ok(&name_generic.name)
-    } else {
-        Err(ValidateError::Unsupported("generic arg".into()))
-    }
-}
-
 // The only way a range start or end can be specified is with a literal
 // value, or with a typename.  We will accept either of those, and throw
 // an error otherwise.  Let the validator worry about whether a typename
@@ -110,7 +101,7 @@ fn ignore_generic_arg(name_generic: &ast::NameGeneric) -> FlattenResult<&str> {
 fn range_point(point: &ast::Type2) -> FlattenResult<Node> {
     let node = match point {
         ast::Type2::Value(v) => flatten_value(v),
-        ast::Type2::Typename(t) => flatten_typename(ignore_generic_arg(t)?),
+        ast::Type2::Typename(t) => flatten_name_generic(t),
         _ => Err(ValidateError::Structural(
             "bad type on range operator".into(),
         )),
@@ -157,11 +148,11 @@ fn flatten_type2(ty2: &ast::Type2) -> FlattenResult<Node> {
     use ast::Type2;
     match ty2 {
         Type2::Value(v) => flatten_value(v),
-        Type2::Typename(s) => flatten_typename(ignore_generic_arg(s)?),
+        Type2::Typename(s) => flatten_name_generic(s),
         Type2::Parethesized(t) => flatten_type(t),
         Type2::Map(g) => flatten_map(&g),
         Type2::Array(g) => flatten_array(&g),
-        Type2::Unwrap(r) => Ok(Node::Unwrap(Rule::new(ignore_generic_arg(r)?))),
+        Type2::Unwrap(r) => Ok(Node::Unwrap(flatten_rule_generic(r)?)),
     }
 }
 
@@ -242,9 +233,46 @@ fn flatten_typename(name: &str) -> FlattenResult<Node> {
         // We failed to find this string in the standard prelude, so we will
         // assume it's a rule or group identifier.  No further validation is
         // done at this time.
-        _ => Node::Rule(Rule::new(name)),
+        _ => Node::Rule(Rule::new_name(name)),
     };
     Ok(result)
+}
+
+// Similar to flatten_name_generic, but if a prelude type is detected,
+// it returns an error.  This is for the "unwrap" operator, which can
+// only be used on group references, not prelude types.
+//
+// This code doesn't validate that the rule name is actually a group; that
+// will happen later.
+fn flatten_rule_generic(name_generic: &ast::NameGeneric) -> FlattenResult<Rule> {
+    let result = flatten_name_generic(name_generic);
+    match result {
+        Ok(Node::Rule(r)) => Ok(r),
+        _ => Err(ValidateError::GenericError),
+    }
+}
+
+fn flatten_name_generic(name_generic: &ast::NameGeneric) -> FlattenResult<Node> {
+    // Flatten the name
+    let mut node = flatten_typename(&name_generic.name)?;
+    match node {
+        Node::Rule(ref mut r) => {
+            // Add the args to the rule.
+            for arg in &name_generic.generic_args {
+                // Need to flatten each individual generic arg.
+                let arg_node = flatten_type1(&arg)?;
+                r.generic_args.push(arg_node);
+            }
+        }
+        _ => {
+            // If the name resolves to a prelude type, and there are generic args,
+            // return an error.
+            if !name_generic.generic_args.is_empty() {
+                return Err(ValidateError::GenericError);
+            }
+        }
+    }
+    Ok(node)
 }
 
 /// Flatten a group into a Map.
@@ -386,8 +414,151 @@ fn flatten_memberkey(memberkey: &ast::MemberKey) -> FlattenResult<Node> {
     }
 }
 
+// Useful utilities for testing the flatten code.
+#[cfg(test)]
+#[macro_use]
+mod test_utils {
+    use super::*;
+
+    // Given a string, generate a rule reference.
+    impl From<&str> for Rule {
+        fn from(s: &str) -> Self {
+            Rule {
+                name: s.to_string(),
+                generic_args: vec![],
+            }
+        }
+    }
+
+    // Given a string, generate a Node::Rule
+    impl From<&str> for Node {
+        fn from(s: &str) -> Self {
+            Node::Rule(Rule::from(s))
+        }
+    }
+
+    // Given a list of names and Nodes, build a rules map.
+    pub fn make_rules(mut list: Vec<(&str, Node)>) -> RulesByName {
+        list.drain(..).map(|(s, n)| (s.to_string(), n)).collect()
+    }
+
+    // Given a single name/Node pair, build a rules map.
+    pub fn make_rule(name: &str, node: Node) -> RulesByName {
+        let mut result = BTreeMap::new();
+        result.insert(name.to_string(), node);
+        result
+    }
+
+    // A trait for generating literals.
+    pub trait CreateLiteral {
+        fn literal(self) -> Node;
+    }
+
+    // Create a literal string.
+    impl CreateLiteral for &str {
+        fn literal(self) -> Node {
+            Node::Literal(Literal::Text(self.to_string()))
+        }
+    }
+
+    // Shorthand for the tstr prelude type
+    pub fn tstr() -> Node {
+        Node::PreludeType(PreludeType::Tstr)
+    }
+
+    // Shorthand for creating a new map.
+    pub fn make_map() -> Map {
+        Map {
+            members: Vec::new(),
+        }
+    }
+
+    // Shorthand for creating a new array.
+    pub fn make_array() -> Array {
+        Array {
+            members: Vec::new(),
+        }
+    }
+
+    // A trait for appending something (to a Map or Array)
+    // since it returns Self, we can chain multiple calls.
+    pub trait Append {
+        fn append<T: Into<Node>>(self, t: T) -> Self;
+    }
+
+    impl Append for Map {
+        fn append<T: Into<Node>>(mut self, t: T) -> Self {
+            let node: Node = t.into();
+            self.members.push(node);
+            self
+        }
+    }
+
+    impl Append for Array {
+        fn append<T: Into<Node>>(mut self, t: T) -> Self {
+            let node: Node = t.into();
+            self.members.push(node);
+            self
+        }
+    }
+
+    // Shorthand for storing a Map inside a Node.
+    impl From<Map> for Node {
+        fn from(m: Map) -> Self {
+            Node::Map(m)
+        }
+    }
+
+    // Shorthand for storing an Array inside a Node.
+    impl From<Array> for Node {
+        fn from(a: Array) -> Self {
+            Node::Array(a)
+        }
+    }
+
+    // Shorthand for storing a KeyValue inside a Node.
+    impl From<KeyValue> for Node {
+        fn from(kv: KeyValue) -> Self {
+            Node::KeyValue(kv)
+        }
+    }
+
+    // Shorthand for storing a Rule inside a Node.
+    impl From<Rule> for Node {
+        fn from(r: Rule) -> Self {
+            Node::Rule(r)
+        }
+    }
+
+    #[derive(Copy, Clone)]
+    pub enum KvCut {
+        Cut,
+        NoCut,
+    }
+    pub use KvCut::*;
+
+    impl From<KvCut> for bool {
+        fn from(c: KvCut) -> bool {
+            match c {
+                Cut => true,
+                NoCut => false,
+            }
+        }
+    }
+
+    // Shorthand for creating a key-value pair, with explicit cut setting.
+    pub fn kv(k: Node, v: Node, cut: KvCut) -> KeyValue {
+        KeyValue {
+            key: Box::new(k),
+            value: Box::new(v),
+            cut: cut.into(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::test_utils::*;
     use super::*;
 
     #[test]
@@ -418,8 +589,7 @@ mod tests {
     fn test_flatten_type_reference() {
         let cddl_input = r#"thing = foo"#;
         let result = flatten_from_str(cddl_input).unwrap();
-        let result = format!("{:?}", result);
-        assert_eq!(result, r#"{"thing": Rule(Rule { name: "foo" })}"#);
+        assert_eq!(result, make_rule("thing", Node::Rule(Rule::from("foo"))));
     }
 
     #[test]
@@ -427,9 +597,9 @@ mod tests {
         // A map containing a bareword key
         let cddl_input = r#"thing = { foo: tstr }"#;
         let result = flatten_from_str(cddl_input).unwrap();
-        let result = format!("{:?}", result);
-        let expected = concat!(
-            r#"{"thing": Map(Map { members: [KeyValue(KeyValue(Literal(Text("foo")), PreludeType(Tstr)))] })}"#
+        let expected = make_rule(
+            "thing",
+            make_map().append(kv("foo".literal(), tstr(), Cut)).into(),
         );
         assert_eq!(result, expected);
 
@@ -438,20 +608,35 @@ mod tests {
         // it will assume a bareword key is being used.
         let cddl_input = r#"thing = { tstr => tstr }"#;
         let result = flatten_from_str(cddl_input).unwrap();
-        let result = format!("{:?}", result);
-        let expected = concat!(
-            r#"{"thing": Map(Map { members: ["#,
-            r#"KeyValue(KeyValue(PreludeType(Tstr), PreludeType(Tstr)))] })}"#
-        );
+        let expected = make_rule("thing", make_map().append(kv(tstr(), tstr(), NoCut)).into());
         assert_eq!(result, expected);
 
         // A map key name alias
         let cddl_input = r#"foo = "bar" thing = { foo => tstr }"#;
         let result = flatten_from_str(cddl_input).unwrap();
-        let result = format!("{:?}", result);
-        let expected = concat!(
-            r#"{"foo": Literal(Text("bar")), "thing": Map(Map { members: ["#,
-            r#"KeyValue(KeyValue(Rule(Rule { name: "foo" }), PreludeType(Tstr)))] })}"#
+        let expected = make_rules(vec![
+            ("foo", "bar".literal()),
+            (
+                "thing",
+                make_map().append(kv("foo".into(), tstr(), NoCut)).into(),
+            ),
+        ]);
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_flatten_generic() {
+        let cddl_input = "message<t, v> = [t, v]";
+        let result = flatten_from_str(cddl_input).unwrap();
+        //
+        // FIXME: this is missing the left-hand side: the generic_parms <t, v> are missing.
+        //
+        let expected = make_rule(
+            "message",
+            make_array()
+                .append(Rule::from("t"))
+                .append(Rule::from("v"))
+                .into(),
         );
         assert_eq!(result, expected);
     }

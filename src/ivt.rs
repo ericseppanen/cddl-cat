@@ -17,7 +17,7 @@ use strum_macros::{Display, IntoStaticStr};
 /// There are more that aren't supported by this crate yet.
 ///
 /// [RFC8610 appendix D]: https://tools.ietf.org/html/rfc8610#appendix-D
-#[derive(Debug, Copy, Clone, Display)]
+#[derive(Debug, Copy, Clone, PartialEq, Display)]
 #[allow(missing_docs)]
 pub enum PreludeType {
     /// Any type or embedded data structure
@@ -41,7 +41,7 @@ pub enum PreludeType {
 }
 
 /// A literal value, e.g. `7`, `1.3`, or ``"foo"``.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub enum Literal {
     Bool(bool),
@@ -94,25 +94,36 @@ pub fn literal_bytes<T: Into<Vec<u8>>>(b: T) -> Node {
 }
 
 /// A rule reference, linked to a dispatch object for later resolution.
-#[derive(Debug, Clone)]
+///
+/// Resolving the rule reference is handled by the validation context.
+#[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub struct Rule {
     pub name: String,
-    // Resolving the rule reference is handled by the validation context.
+    pub generic_args: Vec<Node>,
 }
 
 impl Rule {
     // Create a new rule reference by name
     #[doc(hidden)] // Only pub for integration tests
-    pub fn new(name: &str) -> Rule {
+    pub fn new(name: &str, generic_args: Vec<Node>) -> Rule {
         Rule {
             name: name.to_string(),
+            generic_args,
+        }
+    }
+
+    #[doc(hidden)] // Only pub for integration tests
+    pub fn new_name(name: &str) -> Rule {
+        Rule {
+            name: name.to_string(),
+            generic_args: Vec::new(),
         }
     }
 }
 
 /// A Choice validates if any one of a set of options validates.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub struct Choice {
     pub options: Vec<Node>,
@@ -144,7 +155,7 @@ pub struct Choice {
 ///
 /// See RFC8610 3.5.4 for more discussion.
 ///
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 #[allow(missing_docs)]
 pub struct KeyValue {
     pub key: Box<Node>,
@@ -200,7 +211,7 @@ pub type OccurLimit = ast::Occur;
 ///
 /// This implementation wraps the Node that the occurrence applies to.
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub struct Occur {
     pub limit: OccurLimit,
@@ -257,14 +268,14 @@ impl fmt::Display for Occur {
 }
 
 /// A map containing key-value pairs.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub struct Map {
     pub members: Vec<Node>,
 }
 
 /// A context-free group of key-value pairs.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub struct Group {
     pub members: Vec<Node>,
@@ -299,7 +310,7 @@ pub struct Group {
 /// CDDL arrays may be composed of key-value pairs, but the keys are solely
 /// for information/debugging; they are ignored for validation purposes.
 ///
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub struct Array {
     pub members: Vec<Node>,
@@ -312,7 +323,7 @@ pub struct Array {
 /// CDDL only defines ranges between two integers or between two floating
 /// point values.  A lower bound that exceeds the upper bound is valid CDDL,
 /// but behaves as an empty set.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 #[allow(missing_docs)]
 pub struct Range {
     pub start: Box<Node>,
@@ -328,7 +339,7 @@ impl fmt::Display for Range {
 }
 
 /// Any node in the Intermediate Validation Tree.
-#[derive(Debug, Clone, IntoStaticStr)]
+#[derive(Debug, Clone, PartialEq, IntoStaticStr)]
 #[allow(missing_docs)]
 pub enum Node {
     Literal(Literal),

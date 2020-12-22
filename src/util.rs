@@ -25,6 +25,8 @@ pub enum ValidateError {
     Unsupported(String),
     /// A data value that can't be validated by CDDL.
     ValueError(String),
+    /// A generic type parameter was used incorrectly.
+    GenericError,
 }
 
 impl ValidateError {
@@ -87,6 +89,7 @@ impl fmt::Display for ValidateError {
             MissingRule(rule) => write!(f, "MissingRule({})", rule),
             Unsupported(msg) => write!(f, "Unsupported {}", msg),
             ValueError(msg) => write!(f, "ValueError({})", msg),
+            GenericError => write!(f, "GenericError"),
         }
     }
 }

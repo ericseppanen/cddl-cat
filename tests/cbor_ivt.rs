@@ -125,7 +125,7 @@ fn validate_rule_ref() {
     let mut rules = RulesByName::new();
     rules.insert("seven".to_string(), LITERAL_7.clone());
     let ctx = BasicContext::new(rules);
-    let node2 = &Node::Rule(Rule::new("seven"));
+    let node2 = &Node::Rule(Rule::new_name("seven"));
     validate_cbor(node2, &gen_value(7), &ctx).unwrap();
     validate_cbor(node2, &gen_value(8), &ctx).unwrap_err();
 }
