@@ -1326,18 +1326,19 @@ mod test_utils {
         }
     }
 
-    pub fn gen_array<T: Into<GrpEnt>>(mut members: Vec<T>) -> Type1 {
+    pub fn gen_group<T: Into<GrpEnt>>(mut members: Vec<T>) -> Group {
         // convert the members into individual GrpEnt structs
         let grpents: Vec<GrpEnt> = members.drain(..).map(|x| x.into()).collect();
-        // construct an array containing one GrpChoice.
-        Type1::Simple(Type2::Array(Group(vec![GrpChoice(grpents)])))
+        // construct a Group containing one GrpChoice.
+        Group(vec![GrpChoice(grpents)])
     }
 
-    pub fn gen_map<T: Into<GrpEnt>>(mut members: Vec<T>) -> Type1 {
-        // convert the members into individual GrpEnt structs
-        let grpents: Vec<GrpEnt> = members.drain(..).map(|x| x.into()).collect();
-        // construct a map containing one GrpChoice.
-        Type1::Simple(Type2::Map(Group(vec![GrpChoice(grpents)])))
+    pub fn gen_array<T: Into<GrpEnt>>(members: Vec<T>) -> Type1 {
+        Type1::Simple(Type2::Array(gen_group(members)))
+    }
+
+    pub fn gen_map<T: Into<GrpEnt>>(members: Vec<T>) -> Type1 {
+        Type1::Simple(Type2::Map(gen_group(members)))
     }
 
     // Generate a single-Type1 Type struct.
@@ -1677,6 +1678,19 @@ mod tests {
                 name: "foo".into(),
                 generic_parms: vec![],
                 val: RuleVal::AssignType("bar".into())
+            }
+        );
+
+        let result = rule("foo=(bar, baz)").unwrap().1;
+        assert_eq!(
+            result,
+            Rule {
+                name: "foo".into(),
+                generic_parms: vec![],
+                val: RuleVal::AssignGroup(GrpEnt {
+                    occur: None,
+                    val: GrpEntVal::Parenthesized(gen_group(vec!["bar", "baz"]).into()),
+                })
             }
         );
 
