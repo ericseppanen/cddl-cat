@@ -114,24 +114,27 @@ pub trait ErrorMatch {
 }
 
 impl ErrorMatch for ValidateResult {
-    #[track_caller]
+    #[rustversion::attr(since(1.46), track_caller)]
     fn err_mismatch(&self) -> () {
-        if !matches!(self, Err(ValidateError::Mismatch(_))) {
-            panic!("expected Mismatch, got {:?}", self);
+        match self {
+            Err(ValidateError::Mismatch(_)) => (),
+            _ => panic!("expected Mismatch, got {:?}", self),
         }
     }
 
-    #[track_caller]
+    #[rustversion::attr(since(1.46), track_caller)]
     fn err_missing_rule(&self) -> () {
-        if !matches!(self, Err(ValidateError::MissingRule(_))) {
-            panic!("expected MissingRule, got {:?}", self);
+        match self {
+            Err(ValidateError::MissingRule(_)) => (),
+            _ => panic!("expected MissingRule, got {:?}", self),
         }
     }
 
-    #[track_caller]
+    #[rustversion::attr(since(1.46), track_caller)]
     fn err_generic(&self) -> () {
-        if !matches!(self, Err(ValidateError::GenericError)) {
-            panic!("expected GenericError, got {:?}", self);
+        match self {
+            Err(ValidateError::GenericError) => (),
+            _ => panic!("expected GenericError, got {:?}", self),
         }
     }
 }
