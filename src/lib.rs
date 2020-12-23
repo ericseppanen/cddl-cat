@@ -97,9 +97,9 @@
 //! - Ranges (e.g. `1..7` or `1...8`)
 //! - Unwrapping (`~`)
 //! - Map keys with cut syntax (`^ =>`)
+//! - Generics
 //!
 //! Unimplemented CDDL features:
-//! - Generics
 //! - Extend type with `/=`
 //! - Extend group with `//=`
 //! - Type sockets with `$`

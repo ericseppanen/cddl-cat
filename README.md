@@ -91,9 +91,9 @@ Supported CDDL features:
 - Ranges (e.g. `1..7` or `1...8`)
 - Unwrapping (`~`)
 - Map keys with cut syntax (`^ =>`)
+- Generic types
 
 Unimplemented features:
-- Generics
 - Extend type with `/=`
 - Extend group with `//=`
 - Type sockets with `$`
