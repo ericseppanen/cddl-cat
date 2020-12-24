@@ -1087,7 +1087,7 @@ fn name_generic(input: &str) -> JResult<&str, NameGeneric> {
     let f = pair(ident, opt(generic_arg));
     map(f, |(name, generic)| {
         // Replace None with empty Vec.
-        let generic_args = generic.unwrap_or(Vec::new());
+        let generic_args = generic.unwrap_or_default();
         NameGeneric {
             name: name.to_string(),
             generic_args,
@@ -1109,7 +1109,7 @@ fn rule(input: &str) -> JResult<&str, Rule> {
     map(f, |((name, gp), val)| Rule {
         name: name.into(),
         // turn Vec<&str> into Vec<String>
-        generic_parms: gp.unwrap_or(Vec::new()).drain(..).map(|s| s.to_string()).collect(),
+        generic_parms: gp.unwrap_or_default().drain(..).map(|s| s.to_string()).collect(),
         val,
     })(input)
 }

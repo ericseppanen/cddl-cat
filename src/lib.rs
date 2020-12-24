@@ -118,6 +118,10 @@
 #![warn(missing_docs)]
 #![forbid(unsafe_code)]
 #![warn(clippy::cast_possible_truncation)]
+#![allow(
+    // matches! is only 1.42+
+    clippy::match_like_matches_macro,
+)]
 
 pub mod ast;
 pub mod context;

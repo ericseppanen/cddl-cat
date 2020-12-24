@@ -108,14 +108,14 @@ pub type ValidateResult = Result<(), ValidateError>;
 // error was returned.
 #[doc(hidden)]
 pub trait ErrorMatch {
-    fn err_mismatch(&self) -> ();
-    fn err_missing_rule(&self) -> ();
-    fn err_generic(&self) -> ();
+    fn err_mismatch(&self);
+    fn err_missing_rule(&self);
+    fn err_generic(&self);
 }
 
 impl ErrorMatch for ValidateResult {
     #[rustversion::attr(since(1.46), track_caller)]
-    fn err_mismatch(&self) -> () {
+    fn err_mismatch(&self) {
         match self {
             Err(ValidateError::Mismatch(_)) => (),
             _ => panic!("expected Mismatch, got {:?}", self),
@@ -123,7 +123,7 @@ impl ErrorMatch for ValidateResult {
     }
 
     #[rustversion::attr(since(1.46), track_caller)]
-    fn err_missing_rule(&self) -> () {
+    fn err_missing_rule(&self) {
         match self {
             Err(ValidateError::MissingRule(_)) => (),
             _ => panic!("expected MissingRule, got {:?}", self),
@@ -131,7 +131,7 @@ impl ErrorMatch for ValidateResult {
     }
 
     #[rustversion::attr(since(1.46), track_caller)]
-    fn err_generic(&self) -> () {
+    fn err_generic(&self) {
         match self {
             Err(ValidateError::GenericError) => (),
             _ => panic!("expected GenericError, got {:?}", self),

@@ -74,11 +74,12 @@ impl<'a> Context<'a> {
             // If we stored a past_ctx along with the generic args, then pass that
             // context along with the node that is substituting for this generic
             // parameter name.  Otherwise, return a new blank Context.
-            let ctx = self.generic_map.past_ctx.cloned().unwrap_or(self.blank());
-            return Ok(NodeContext {
-                node: node,
-                ctx: ctx,
-            });
+            let ctx = self
+                .generic_map
+                .past_ctx
+                .cloned()
+                .unwrap_or_else(|| self.blank());
+            return Ok(NodeContext { node, ctx });
         }
 
         let rule_def: &RuleDef = self.lookup.lookup_rule(&rule.name)?;
