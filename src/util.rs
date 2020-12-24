@@ -111,6 +111,7 @@ pub trait ErrorMatch {
     fn err_mismatch(&self);
     fn err_missing_rule(&self);
     fn err_generic(&self);
+    fn err_parse(&self);
 }
 
 impl ErrorMatch for ValidateResult {
@@ -135,6 +136,14 @@ impl ErrorMatch for ValidateResult {
         match self {
             Err(ValidateError::GenericError) => (),
             _ => panic!("expected GenericError, got {:?}", self),
+        }
+    }
+
+    #[rustversion::attr(since(1.46), track_caller)]
+    fn err_parse(&self) {
+        match self {
+            Err(ValidateError::ParseError(_)) => (),
+            _ => panic!("expected ParseError, got {:?}", self),
         }
     }
 }

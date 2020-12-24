@@ -624,19 +624,29 @@ fn grpent_memberkey_tail(input: &str) -> JResult<&str, Type> {
 //
 // The key must be a Type2::Value or Type2::Typename or this function
 // will panic.
-fn assemble_basic_member(key: Type1, value: Type) -> Member {
+fn assemble_basic_member(key: Type1, value: Type) -> Result<Member, ParseError> {
     let member_key = match key {
         Type1::Simple(Type2::Value(v)) => MemberKeyVal::Value(v),
-        Type1::Simple(Type2::Typename(s)) => MemberKeyVal::Bareword(s.name), // FIXME: ignoring generic args
+        Type1::Simple(Type2::Typename(s)) => {
+            // Because we used the "key:value" syntax, the typename may
+            // only be a plain string, without generic parameters.
+            // If generic parameters are desired, the "key=>value" syntax
+            // would be required (and we would not have arrived here).
+
+            if !s.generic_args.is_empty() {
+                return Err(parse_error(Unparseable, "Bareword with generic arguments"));
+            }
+            MemberKeyVal::Bareword(s.name)
+        }
         _ => panic!("assemble_basic_member wrong key type"),
     };
-    Member {
+    Ok(Member {
         key: Some(MemberKey {
             val: member_key,
             cut: true,
         }),
         value,
-    }
+    })
 }
 
 // grpent = [occur S] [memberkey S] type
@@ -694,7 +704,11 @@ fn grpent_member(input: &str) -> JResult<&str, Member> {
             // Next, try to match ":" ws ty
             if let Ok((input, tail_type)) = grpent_memberkey_tail(input) {
                 let member = assemble_basic_member(first_type1, tail_type);
-                return Ok((input, member));
+                match member {
+                    Ok(member) => return Ok((input, member)),
+                    Err(e) => return Err(nom::Err::Failure(e)),
+                }
+
             }
         }
         // "X:Y" isn't allowed when X is some other Type1 variant.
@@ -1354,6 +1368,14 @@ mod test_utils {
             Type(vec![Type1::from(s)])
         }
     }
+
+    // Create a type name with generic arguments
+    pub fn generic<T: Into<Type1>>(name: &str, mut generic_args: Vec<T>) -> Type1 {
+        Type1::Simple(Type2::Typename(NameGeneric {
+            name: name.to_string(),
+            generic_args: generic_args.drain(..).map(|x| x.into()).collect(),
+        }))
+    }
 }
 
 #[cfg(test)]
@@ -1527,6 +1549,15 @@ mod tests {
             result.unwrap().1,
             kv_member(Type1::from(42.literal()), "b", Cut)
         );
+
+        let result = grpent_member("abc<T> => def");
+        assert_eq!(
+            result.unwrap().1,
+            kv_member(generic("abc", vec!["T"]), "def", NoCut)
+        );
+
+        // Generic arguments not allowed with ":"
+        grpent_member("abc<T> : def").unwrap_err();
     }
 
     #[test]

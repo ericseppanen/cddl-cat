@@ -531,6 +531,17 @@ fn json_generic_basic() {
 }
 
 #[test]
+fn json_generic_map() {
+    let cddl_input = "identity<T> = T  thing = {identity<tstr> => identity<int>}";
+    validate_json_str("thing", cddl_input, r#" { "abc": 0 } "#).unwrap();
+
+    // The "key:value" syntax only allows barewords or values; it doesn't allow
+    // generic arguments.
+    let cddl_input = "identity<T> = T  thing = {identity<tstr>: identity<int>}";
+    validate_json_str("thing", cddl_input, r#" { "abc": 0 } "#).err_parse();
+}
+
+#[test]
 fn json_generic_occurrence() {
     let cddl_input = r#"one_or_more<T> = (+ T)  thing = [one_or_more<int>]"#;
     validate_json_str("thing", cddl_input, "[4]").unwrap();
