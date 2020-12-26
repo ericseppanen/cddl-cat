@@ -208,8 +208,8 @@ pub struct TypeRange {
 #[derive(Debug, PartialEq)]
 #[allow(missing_docs)]
 pub struct TypeControl {
-    pub first: Type2,
-    pub second: Type2,
+    pub target: Type2,
+    pub arg: Type2,
     pub op: String,
 }
 

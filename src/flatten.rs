@@ -88,8 +88,48 @@ fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
     match ty1 {
         Simple(ty2) => flatten_type2(ty2),
         Range(r) => flatten_range(r),
-        Control(_) => Err(ValidateError::Unsupported("control operator".into())),
+        Control(ctl) => flatten_control(ctl),
     }
+}
+
+// We only support the following control operators:
+//
+// <target> .size <integer literal>
+//
+//     The only allowed targets are bstr, tstr, and unsigned integers.
+//
+// TODO:
+// .bits
+// .regexp
+// .cbor .cborseq
+// .within .and
+// .lt .le .gt .ge .eq .ne. default
+// According to RFC 8610 3.8, new control operators may arrive later.
+//
+fn flatten_control(ctl: &ast::TypeControl) -> FlattenResult<Node> {
+    let ctl_result = match &ctl.op[..] {
+        "size" => {
+            let target = flatten_type2(&ctl.target)?;
+            let size = flatten_type2(&ctl.arg)?;
+
+            // The only allowed limit types are:
+            // A positive literal integer
+            // A named rule (which should resolve to a literal integer)
+            match size {
+                Node::Literal(Literal::Int(_)) => {}
+                Node::Rule(_) => {}
+                _ => return Err(ValidateError::Unsupported(".size limit type".into())),
+            };
+
+            Control::Size(CtlOpSize {
+                target: Box::new(target),
+                size: Box::new(size),
+            })
+        }
+        _ => return Err(ValidateError::Unsupported("control operator".into())),
+    };
+
+    Ok(Node::Control(ctl_result))
 }
 
 // The only way a range start or end can be specified is with a literal
@@ -447,6 +487,8 @@ mod test_utils {
     }
 
     // Given a list of names and Nodes, build a rules map.
+    // Note: This requires Node instead of Into<Node> because we want to allow
+    // multiple types of Node, which must be done by the caller.
     pub fn make_rules(mut list: Vec<(&str, Node)>) -> RulesByName {
         list.drain(..)
             .map(|(s, n)| (s.to_string(), RuleDef::from(n)))
@@ -454,7 +496,8 @@ mod test_utils {
     }
 
     // Given a single name/Node pair, build a rules map.
-    pub fn make_rule(name: &str, node: Node) -> RulesByName {
+    pub fn make_rule<T: Into<Node>>(name: &str, node: T) -> RulesByName {
+        let node: Node = node.into();
         let mut result = BTreeMap::new();
         result.insert(name.to_string(), RuleDef::from(node));
         result
@@ -562,6 +605,13 @@ mod test_utils {
         }
     }
 
+    // Shorthand for storing a Rule inside a Node.
+    impl From<Control> for Node {
+        fn from(r: Control) -> Self {
+            Node::Control(r)
+        }
+    }
+
     #[derive(Copy, Clone)]
     pub enum KvCut {
         Cut,
@@ -621,7 +671,7 @@ mod tests {
     fn test_flatten_type_reference() {
         let cddl_input = r#"thing = foo"#;
         let result = flatten_from_str(cddl_input).unwrap();
-        assert_eq!(result, make_rule("thing", Node::Rule(Rule::from("foo"))));
+        assert_eq!(result, make_rule("thing", Rule::from("foo")));
     }
 
     #[test]
@@ -629,10 +679,7 @@ mod tests {
         // A map containing a bareword key
         let cddl_input = r#"thing = { foo: tstr }"#;
         let result = flatten_from_str(cddl_input).unwrap();
-        let expected = make_rule(
-            "thing",
-            make_map().append(kv("foo".literal(), tstr(), Cut)).into(),
-        );
+        let expected = make_rule("thing", make_map().append(kv("foo".literal(), tstr(), Cut)));
         assert_eq!(result, expected);
 
         // A map containing a prelude type key.
@@ -640,7 +687,7 @@ mod tests {
         // it will assume a bareword key is being used.
         let cddl_input = r#"thing = { tstr => tstr }"#;
         let result = flatten_from_str(cddl_input).unwrap();
-        let expected = make_rule("thing", make_map().append(kv(tstr(), tstr(), NoCut)).into());
+        let expected = make_rule("thing", make_map().append(kv(tstr(), tstr(), NoCut)));
         assert_eq!(result, expected);
 
         // A map key name alias
@@ -667,6 +714,20 @@ mod tests {
                 .append(Rule::from("t"))
                 .append(Rule::from("v"))
                 .into(),
+        );
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn test_control_op() {
+        let cddl_input = "four_bytes = tstr .size 4";
+        let result = flatten_from_str(cddl_input).unwrap();
+        let expected = make_rule(
+            "four_bytes",
+            Control::Size(CtlOpSize {
+                target: Box::new(tstr()),
+                size: Box::new(4.literal()),
+            }),
         );
         assert_eq!(result, expected);
     }

@@ -667,3 +667,41 @@ fn json_generic_malformed() {
     let cddl_input = r#"pair<T, U> = (T, U) thing = [pair<int, int, int>]"#;
     validate_json_str("thing", cddl_input, "[1, 2]").err_generic();
 }
+
+#[test]
+fn json_control_size() {
+    let cddl_input = r#"thing = uint .size 3"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "256").unwrap();
+    validate_json_str("thing", cddl_input, "16777215").unwrap();
+    validate_json_str("thing", cddl_input, "16777216").err_mismatch();
+    validate_json_str("thing", cddl_input, "-256").err_mismatch();
+
+    // indirection
+    let cddl_input = r#"limit = 3  numb = uint  thing = numb .size limit"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "256").unwrap();
+    validate_json_str("thing", cddl_input, "16777215").unwrap();
+    validate_json_str("thing", cddl_input, "16777216").err_mismatch();
+    validate_json_str("thing", cddl_input, "-256").err_mismatch();
+
+    let cddl_input = r#"thing = tstr .size 10"#;
+    validate_json_str("thing", cddl_input, r#""""#).unwrap();
+    validate_json_str("thing", cddl_input, r#""JSON""#).unwrap();
+    validate_json_str("thing", cddl_input, r#""水""#).unwrap();
+    validate_json_str("thing", cddl_input, r#""水水水水""#).err_mismatch();
+    validate_json_str("thing", cddl_input, r#""abcdefghij""#).unwrap();
+    validate_json_str("thing", cddl_input, r#""abcdefghijk""#).err_mismatch();
+
+    // .size is not allowed on signed integers.
+    let cddl_input = r#"thing = int .size 3"#;
+    validate_json_str("thing", cddl_input, "0").unwrap_err();
+
+    // bad target node type
+    let cddl_input = r#"thing = [uint] .size 3"#;
+    validate_json_str("thing", cddl_input, "0").unwrap_err();
+
+    // bad argument node type
+    let cddl_input = r#"thing = uint .size 0.1"#;
+    validate_json_str("thing", cddl_input, "0").unwrap_err();
+}

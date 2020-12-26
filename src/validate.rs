@@ -9,6 +9,7 @@ use crate::value::Value;
 use std::collections::BTreeMap; // used in Value::Map
 use std::collections::HashMap;
 use std::collections::VecDeque;
+use std::convert::TryInto;
 use std::mem::discriminant;
 
 // A map from generic parameter name to the type being used here.
@@ -321,6 +322,7 @@ fn validate(value: &Value, node: &Node, ctx: &Context) -> ValidateResult {
         Node::Occur(_) => Err(ValidateError::Structural("unexpected Occur".into())),
         Node::Unwrap(_) => Err(ValidateError::Structural("unexpected Unwrap".into())),
         Node::Range(r) => validate_range(r, value, ctx),
+        Node::Control(ctl) => validate_control(ctl, value, ctx),
     }
 }
 
@@ -767,6 +769,7 @@ fn validate_map_member(
         Node::Map(_) => Err(ValidateError::Structural("map as map member".into())),
         Node::Array(_) => Err(ValidateError::Structural("array as map member".into())),
         Node::Range(_) => Err(ValidateError::Structural("range as map member".into())),
+        Node::Control(_) => Err(ValidateError::Structural("control op as map member".into())),
     }
 }
 
@@ -937,5 +940,110 @@ fn validate_range(range: &Range, value: &Value, ctx: &Context) -> ValidateResult
                 ))
             }
         }
+    }
+}
+
+// Follow a chain of Rule references until we reach a non-Rule node.
+// FIXME: prevent circular references from looping forever
+fn chase_rules<'a, F, R>(node: &'a Node, ctx: &'a Context<'a>, f: F) -> TempResult<R>
+where
+    F: Fn(&Node) -> TempResult<R>,
+    R: 'static,
+{
+    if let Node::Rule(rule) = node {
+        let answer = ctx.lookup_rule(&rule)?;
+        chase_rules(answer.node, &answer.ctx, f)
+    } else {
+        f(node)
+    }
+}
+
+fn validate_control(ctl: &Control, value: &Value, ctx: &Context) -> ValidateResult {
+    match ctl {
+        Control::Size(ctl_size) => validate_control_size(ctl_size, value, ctx),
+    }
+}
+
+fn validate_control_size(ctl: &CtlOpSize, value: &Value, ctx: &Context) -> ValidateResult {
+    // Follow the chain of rules references until we wind up with a non-Rule node.
+    //let target = chase_rules(&ctl.target, ctx)?;
+    let size: u64 = chase_rules(&ctl.size, ctx, |size_node| {
+        // Compute the size in bytes
+        match size_node {
+            Node::Literal(Literal::Int(i)) => (*i).try_into().map_err(|n| {
+                let msg = format!("bad .size limit {}", n);
+                ValidateError::Structural(msg)
+            }),
+            _ => {
+                let msg = format!("bad .size argument type ({})", size_node);
+                Err(ValidateError::Structural(msg))
+            }
+        }
+    })?;
+
+    chase_rules(&ctl.target, ctx, |target_node| {
+        // Ensure that the target node evaluates to some type that is
+        // compatible with the .size operator, and then validate the size limit.
+        match target_node {
+            Node::PreludeType(PreludeType::Uint) => validate_size_uint(size, value),
+            Node::PreludeType(PreludeType::Tstr) => validate_size_tstr(size, value),
+            Node::PreludeType(PreludeType::Bstr) => validate_size_bstr(size, value),
+            _ => {
+                let msg = format!("bad .size target type ({})", target_node);
+
+                Err(ValidateError::Structural(msg))
+            }
+        }
+    })
+}
+
+fn validate_size_uint(size: u64, value: &Value) -> ValidateResult {
+    match value {
+        Value::Integer(x) => {
+            if *x < 0 {
+                Err(mismatch(".size on negative integer"))
+            } else if size >= 16 {
+                // If the size is 16 or larger, the i128 value will always fit.
+                Ok(())
+            } else {
+                let mask = (1i128 << (size * 8)) - 1;
+                if *x & !mask == 0 {
+                    Ok(())
+                } else {
+                    Err(mismatch("uint over .size limit"))
+                }
+            }
+        }
+        _ => Err(mismatch("uint")),
+    }
+}
+
+// Check the size of a text string.
+fn validate_size_tstr(size: u64, value: &Value) -> ValidateResult {
+    match value {
+        Value::Text(s) => {
+            let size: usize = size.try_into().unwrap_or(usize::MAX);
+            if s.len() > size {
+                Err(mismatch("tstr over .size limit"))
+            } else {
+                Ok(())
+            }
+        }
+        _ => Err(mismatch("tstr")),
+    }
+}
+
+// Check the size of a byte string.
+fn validate_size_bstr(size: u64, value: &Value) -> ValidateResult {
+    match value {
+        Value::Bytes(b) => {
+            let size: usize = size.try_into().unwrap_or(usize::MAX);
+            if b.len() > size {
+                Err(mismatch("bstr over .size limit"))
+            } else {
+                Ok(())
+            }
+        }
+        _ => Err(mismatch("bstr")),
     }
 }

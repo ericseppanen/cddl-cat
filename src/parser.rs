@@ -1018,10 +1018,10 @@ fn type1(input: &str) -> JResult<&str, Type1> {
             inclusive: false,
             end,
         }),
-        (first, Some((op, second))) => Type1::Control(TypeControl {
-            first,
+        (target, Some((op, arg))) => Type1::Control(TypeControl {
+            target,
             op: op.into(),
-            second,
+            arg,
         }),
     })
     (input)
@@ -1646,9 +1646,9 @@ mod tests {
         assert_eq!(
             result.unwrap().1,
             Type1::Control(TypeControl {
-                first: "uint".into(),
-                second: 3.literal().into(),
-                op: "size".to_string()
+                target: "uint".into(),
+                op: "size".to_string(),
+                arg: 3.literal().into(),
             })
         );
 

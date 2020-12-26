@@ -1,6 +1,7 @@
 #![cfg(feature = "serde_cbor")]
 
 use cddl_cat::cbor::validate_cbor_bytes;
+use cddl_cat::util::ErrorMatch;
 use serde::{Deserialize, Serialize};
 
 #[rustfmt::skip] // allow arbitrary indents for readability
@@ -15,6 +16,7 @@ pub mod cbor {
     pub const INT_1:        &[u8] = b"\x01";
     pub const INT_23:       &[u8] = b"\x17";
     pub const INT_24:       &[u8] = b"\x18\x18";
+    pub const INT_1T:       &[u8] = b"\x1b\x00\x00\x00\xe8\xd4\xa5\x10\x00";
     pub const NINT_1000:    &[u8] = b"\x39\x03\xe7";  // -1000
 
     pub const FLOAT_0_0:    &[u8] = b"\xf9\x00\x00";            // #7.25 (f16)
@@ -27,8 +29,8 @@ pub mod cbor {
     pub const ARRAY_1_23_45:&[u8] = b"\x83\x01\x82\x02\x03\x82\x04\x05";  // [1, [2, 3], [4, 5]]
 
     pub const TEXT_EMPTY:   &[u8] = b"\x60";
-    pub const TEXT_IETF:    &[u8] = b"\x64\x49\x45\x54\x46";
-    pub const TEXT_CJK:     &[u8] = b"\x63\xe6\xb0\xb4";    // "水
+    pub const TEXT_IETF:    &[u8] = b"\x64\x49\x45\x54\x46"; // "IETF"
+    pub const TEXT_CJK:     &[u8] = b"\x63\xe6\xb0\xb4";     // "水"
 
     pub const BYTES_EMPTY:  &[u8] = b"\x40";
     pub const BYTES_1234:   &[u8] = b"\x44\x01\x02\x03\x04"; // hex 01020304
@@ -611,4 +613,34 @@ fn test_fatal_propagation() {
     let cddl_input = r#"thing = {name: (bad_rule / tstr), age: int}"#;
     let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
     assert_eq!(err.to_string(), "MissingRule(bad_rule)");
+}
+
+#[test]
+fn cbor_control_size() {
+    let cddl_input = r#"thing = bstr .size 3"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::BYTES_EMPTY).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::BYTES_1234).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_CJK).err_mismatch();
+
+    let cddl_input = r#"thing = tstr .size 3"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_CJK).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_IETF).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::BYTES_EMPTY).err_mismatch();
+
+    let cddl_input = r#"thing = uint .size 3"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_0).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_24).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::NINT_1000).err_mismatch();
+
+    let cddl_input = r#"thing = uint .size 5"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).unwrap();
+
+    let cddl_input = r#"thing = uint .size 16"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).unwrap();
+
+    let cddl_input = r#"thing = uint .size 999999"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).unwrap();
 }

@@ -366,6 +366,36 @@ impl fmt::Display for Range {
     }
 }
 
+/// Control Operators
+///
+/// A control operator constrains a type by adding an additional condition
+/// that must be met. For example, "tstr .size 10" permits only strings of
+/// 10 bytes or less.  See RFC 8610 section 3.8 for details.
+#[rustversion::attr(since(1.40), non_exhaustive)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum Control {
+    /// Limit the size in bytes.
+    Size(CtlOpSize),
+}
+
+/// Control Operator `.size`
+///
+/// `.size` is defined in RFC 8610 3.8.1.
+/// It sets an upper limit, measured in bytes.
+///
+/// For example, "tstr .size 10" permits only strings of
+/// 10 bytes or less.  See RFC 8610 section 3.8 for details.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CtlOpSize {
+    /// The type that is size-constrained.
+    ///
+    /// Only certain types are permitted.  RFC 8610 defines `.size` for
+    /// `tstr`, `bstr`, and unsigned integers.
+    pub target: Box<Node>,
+    /// The size limit, in bytes.
+    pub size: Box<Node>,
+}
+
 /// Any node in the Intermediate Validation Tree.
 #[derive(Debug, Clone, PartialEq, IntoStaticStr)]
 #[allow(missing_docs)]
@@ -381,6 +411,7 @@ pub enum Node {
     Occur(Occur),
     Unwrap(Rule),
     Range(Range),
+    Control(Control),
 }
 
 impl fmt::Display for Node {
