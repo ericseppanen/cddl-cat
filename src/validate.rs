@@ -37,6 +37,7 @@ impl Default for GenericMap<'_> {
 struct Context<'a> {
     lookup: &'a dyn LookupContext,
     generic_map: GenericMap<'a>,
+    depth: u32,
 }
 
 impl std::fmt::Debug for Context<'_> {
@@ -53,6 +54,18 @@ struct NodeContext<'a> {
 }
 
 impl<'a> Context<'a> {
+    // Set a maximum depth, to avoid infinite recursion in the case of
+    // circular rule references.
+    const MAX_DEPTH: u32 = 50;
+
+    fn inc_depth(&self) -> TempResult<u32> {
+        if self.depth >= Self::MAX_DEPTH {
+            Err(ValidateError::Structural("hit recursion limit".into()))
+        } else {
+            Ok(self.depth + 1)
+        }
+    }
+
     // `lookup_rule` will first do a search for a local generic parameter name
     // first, followed by a lookup for a rule by that name.
 
@@ -75,11 +88,10 @@ impl<'a> Context<'a> {
             // If we stored a past_ctx along with the generic args, then pass that
             // context along with the node that is substituting for this generic
             // parameter name.  Otherwise, return a new blank Context.
-            let ctx = self
-                .generic_map
-                .past_ctx
-                .cloned()
-                .unwrap_or_else(|| self.blank());
+            let ctx = match self.generic_map.past_ctx {
+                Some(ctx) => ctx.clone(),
+                None => self.blank()?,
+            };
             return Ok(NodeContext { node, ctx });
         }
 
@@ -95,11 +107,12 @@ impl<'a> Context<'a> {
     }
 
     // Create a new blank Context (with no parameter map)
-    fn blank(&self) -> Context<'a> {
-        Context {
+    fn blank(&self) -> TempResult<Context<'a>> {
+        Ok(Context {
             lookup: self.lookup,
             generic_map: GenericMap::default(),
-        }
+            depth: self.inc_depth()?,
+        })
     }
 
     // Create a new Context, with optional generic parameter map.
@@ -130,6 +143,7 @@ impl<'a> Context<'a> {
         Ok(Context {
             lookup: self.lookup,
             generic_map,
+            depth: self.inc_depth()?,
         })
     }
 }
@@ -148,6 +162,7 @@ pub(crate) fn do_validate(
     let ctx = Context {
         lookup: ctx,
         generic_map: GenericMap::default(),
+        depth: 0,
     };
     let node = &rule_def.node;
     validate(value, node, &ctx)
@@ -944,7 +959,6 @@ fn validate_range(range: &Range, value: &Value, ctx: &Context) -> ValidateResult
 }
 
 // Follow a chain of Rule references until we reach a non-Rule node.
-// FIXME: prevent circular references from looping forever
 fn chase_rules<'a, F, R>(node: &'a Node, ctx: &'a Context<'a>, f: F) -> TempResult<R>
 where
     F: Fn(&Node) -> TempResult<R>,

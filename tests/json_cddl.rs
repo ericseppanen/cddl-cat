@@ -705,3 +705,9 @@ fn json_control_size() {
     let cddl_input = r#"thing = uint .size 0.1"#;
     validate_json_str("thing", cddl_input, "0").unwrap_err();
 }
+
+#[test]
+fn json_infinite_recursion() {
+    let cddl_input = r#"thing1 = thing2  thing2 = thing1"#;
+    validate_json_str("thing1", cddl_input, "0").unwrap_err();
+}
