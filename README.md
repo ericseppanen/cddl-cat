@@ -92,13 +92,14 @@ Supported CDDL features:
 - Unwrapping (`~`)
 - Map keys with cut syntax (`^ =>`)
 - Generic types
+- Control operator `.size`
 
 Unimplemented features:
 - Extend type with `/=`
 - Extend group with `//=`
 - Type sockets with `$`
 - Group sockets with `$$`
-- Control operators, e.g. `.size`, `.bits`, ...
+- Control operators other than `.size` (e.g. `.bits`, `.regexp` ...)
 - Group enumeration with `&`
 - Tagged data with `#`
 - Hexfloat literals (e.g. `0x1.921fb5p+1`)
