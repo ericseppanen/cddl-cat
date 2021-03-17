@@ -1036,7 +1036,8 @@ fn validate_size_uint(size: u64, value: &Value) -> ValidateResult {
 fn validate_size_tstr(size: u64, value: &Value) -> ValidateResult {
     match value {
         Value::Text(s) => {
-            let size: usize = size.try_into().unwrap_or(usize::MAX);
+            // NOTE: usize::MAX is only for Rust >= 1.43
+            let size: usize = size.try_into().unwrap_or(std::usize::MAX);
             if s.len() > size {
                 Err(mismatch("tstr over .size limit"))
             } else {
@@ -1051,7 +1052,8 @@ fn validate_size_tstr(size: u64, value: &Value) -> ValidateResult {
 fn validate_size_bstr(size: u64, value: &Value) -> ValidateResult {
     match value {
         Value::Bytes(b) => {
-            let size: usize = size.try_into().unwrap_or(usize::MAX);
+            // NOTE: usize::MAX is only for Rust >= 1.43
+            let size: usize = size.try_into().unwrap_or(std::usize::MAX);
             if b.len() > size {
                 Err(mismatch("bstr over .size limit"))
             } else {
