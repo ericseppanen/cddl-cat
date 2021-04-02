@@ -470,6 +470,11 @@ fn validate_cbor_map_group() {
     let cddl_input = r#"thing = { (name: tstr, photo: bstr //
                                   (name: tstr, fail: bool // name: tstr, age: int)) }"#;
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
+
+    // Test a group where none of the variants match.
+    let cddl_input =
+        r#"thing = { foo // bar } foo = (name: tstr, age: bool) bar = (name: tstr, age: float)"#;
+    validate_cbor_bytes("thing", cddl_input, &cbor_bytes).err_mismatch();
 }
 
 #[test]
