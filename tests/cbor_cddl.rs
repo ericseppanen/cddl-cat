@@ -634,6 +634,7 @@ fn cbor_control_size() {
     validate_cbor_bytes("thing", cddl_input, cbor::INT_24).unwrap();
     validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).err_mismatch();
     validate_cbor_bytes("thing", cddl_input, cbor::NINT_1000).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).err_mismatch();
 
     let cddl_input = r#"thing = uint .size 5"#;
     validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).unwrap();
@@ -643,4 +644,10 @@ fn cbor_control_size() {
 
     let cddl_input = r#"thing = uint .size 999999"#;
     validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).unwrap();
+
+    let cddl_input = r#"thing = bstr .size 0.1"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::BYTES_EMPTY).unwrap_err();
+
+    let cddl_input = r#"thing = bstr .size -1"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::BYTES_EMPTY).unwrap_err();
 }

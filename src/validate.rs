@@ -980,15 +980,19 @@ fn validate_control(ctl: &Control, value: &Value, ctx: &Context) -> ValidateResu
 
 fn validate_control_size(ctl: &CtlOpSize, value: &Value, ctx: &Context) -> ValidateResult {
     // Follow the chain of rules references until we wind up with a non-Rule node.
-    //let target = chase_rules(&ctl.target, ctx)?;
     let size: u64 = chase_rules(&ctl.size, ctx, |size_node| {
         // Compute the size in bytes
         match size_node {
-            Node::Literal(Literal::Int(i)) => (*i).try_into().map_err(|n| {
-                let msg = format!("bad .size limit {}", n);
+            Node::Literal(Literal::Int(i)) => (*i).try_into().map_err(|_| {
+                // Note the parser doesn't handle >64 bit positive integers.
+                // Under normal circumstances, the only way this can occur is
+                // when the limit is negative.
+                let msg = format!("bad .size limit {}", i);
                 ValidateError::Structural(msg)
             }),
             _ => {
+                // Under normal circumstances this error is unreachable
+                // because the flatten code will only allow literal integer sizes.
                 let msg = format!("bad .size argument type ({})", size_node);
                 Err(ValidateError::Structural(msg))
             }
