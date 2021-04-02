@@ -30,6 +30,8 @@
 //!   can be used by other CDDL schemas.  In the future the validation process
 //!   itself may be customized by changing the `LookupContext` configuration.
 //!
+//! - Comprehensive tests (90%+ coverage).
+//!
 //! # Examples
 //!
 //! This example validates JSON-encoded data against a CDDL schema:
