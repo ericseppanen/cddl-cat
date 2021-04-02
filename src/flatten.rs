@@ -530,7 +530,8 @@ mod test_utils {
     }
 
     // Create a literal integer.
-    impl CreateLiteral for u64 {
+    // This will work for both signed and unsigned rust literals.
+    impl CreateLiteral for i64 {
         fn literal(self) -> Node {
             Node::Literal(Literal::Int(self.into()))
         }
@@ -648,6 +649,11 @@ mod tests {
         let cddl_input = r#"thing = 1"#;
         let result = flatten_from_str(cddl_input).unwrap();
         let expected = make_rule("thing", 1.literal());
+        assert_eq!(result, expected);
+
+        let cddl_input = r#"thing = -1"#;
+        let result = flatten_from_str(cddl_input).unwrap();
+        let expected = make_rule("thing", (-1i64).literal());
         assert_eq!(result, expected);
     }
 
