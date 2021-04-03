@@ -496,6 +496,13 @@ fn validate_choice_example() {
     }"#;
     validate_json_str("address", cddl_input, &json_str).unwrap();
 
+    // missing zip_code
+    let json_str = r#"{
+        "street": "Eleventh St.",
+        "name": "San Francisco"
+    }"#;
+    validate_json_str("address", cddl_input, &json_str).err_mismatch();
+
     let input = Pickup { per_pickup: true };
     let json_str = serde_json::to_string(&input).unwrap();
     validate_json_str("address", cddl_input, &json_str).unwrap();
