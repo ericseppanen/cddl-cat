@@ -1,0 +1,2 @@
+[tarpaulin]
+target-dir = "target/tarpaulin"
