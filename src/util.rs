@@ -112,6 +112,7 @@ pub trait ErrorMatch {
     fn err_missing_rule(&self);
     fn err_generic(&self);
     fn err_parse(&self);
+    fn err_structural(&self);
 }
 
 impl ErrorMatch for ValidateResult {
@@ -144,6 +145,14 @@ impl ErrorMatch for ValidateResult {
         match self {
             Err(ValidateError::ParseError(_)) => (),
             _ => panic!("expected ParseError, got {:?}", self),
+        }
+    }
+
+    #[rustversion::attr(since(1.46), track_caller)]
+    fn err_structural(&self) {
+        match self {
+            Err(ValidateError::Structural(_)) => (),
+            _ => panic!("expected Structural, got {:?}", self),
         }
     }
 }
