@@ -942,6 +942,43 @@ fn type2_unwrap(input: &str) -> JResult<&str, NameGeneric> {
     (input)
 }
 
+// "&" S groupname [genericarg]
+// I call the & operator "choice-ify". RFC 8610 (see 2.2.2.2) doesn't say
+// what that operator should be called, and "group choice" already means
+// something different.
+#[rustfmt::skip]
+fn type2_choiceify(input: &str) -> JResult<&str, NameGeneric> {
+    preceded(
+        tag("&"),
+        preceded(
+            ws,
+            name_generic
+        )
+    )
+    (input)
+}
+
+// "&" S "(" S group S ")"
+#[rustfmt::skip]
+fn type2_choiceify_inline(input: &str) -> JResult<&str, Group> {
+    preceded(
+        tag("&"),
+        preceded(
+            ws,
+            delimited(
+                charx('('),
+                delimited(
+                    ws,
+                    group,
+                    ws,
+                ),
+                charx(')')
+            )
+        )
+    )
+    (input)
+}
+
 // type2 = value
 //       / typename [genericarg]
 //       / "(" S type S ")"
@@ -962,6 +999,8 @@ fn type2(input: &str) -> JResult<&str, Type2> {
         map(type2_map, Type2::Map),
         map(type2_array, Type2::Array),
         map(type2_unwrap, Type2::Unwrap),
+        map(type2_choiceify_inline, Type2::ChoiceifyInline),
+        map(type2_choiceify, Type2::Choiceify),
     ))
     (input)
 }
@@ -1280,6 +1319,10 @@ mod test_utils {
         }
     }
 
+    pub fn bareword(s: &str) -> MemberKeyVal {
+        MemberKeyVal::Bareword(s.into())
+    }
+
     impl From<Value> for Type2 {
         fn from(x: Value) -> Type2 {
             Type2::Value(x)
@@ -1323,7 +1366,12 @@ mod test_utils {
         }
     }
 
-    pub fn kv_member<K: Into<MemberKeyVal>>(k: K, v: &str, cut: MemberCut) -> Member {
+    pub fn kv_member<K, V>(k: K, v: V, cut: MemberCut) -> Member
+    where
+        K: Into<MemberKeyVal>,
+        V: Into<Type1>,
+    {
+        let v: Type1 = v.into();
         Member {
             key: Some(MemberKey {
                 val: k.into(),
@@ -1333,7 +1381,11 @@ mod test_utils {
         }
     }
 
-    pub fn kv<K: Into<MemberKeyVal>>(k: K, v: &str, cut: MemberCut) -> GrpEnt {
+    pub fn kv<K, V>(k: K, v: V, cut: MemberCut) -> GrpEnt
+    where
+        K: Into<MemberKeyVal>,
+        V: Into<Type1>,
+    {
         GrpEnt {
             occur: None,
             val: GrpEntVal::Member(kv_member(k, v, cut)),
@@ -1697,6 +1749,21 @@ mod tests {
 
         let result = generic_arg("< foo , _bar_ >").unwrap();
         assert_eq!(result.1, vec!["foo".into(), "_bar_".into()]);
+    }
+
+    #[test]
+    fn choiceify() {
+        assert_eq!(
+            type2("&foo").unwrap().1,
+            Type2::Choiceify(NameGeneric {
+                name: "foo".into(),
+                generic_args: vec![],
+            })
+        );
+        assert_eq!(
+            type2("&(a:1)").unwrap().1,
+            Type2::ChoiceifyInline(gen_group(vec![kv(bareword("a"), 1.literal(), Cut),]))
+        );
     }
 
     #[test]

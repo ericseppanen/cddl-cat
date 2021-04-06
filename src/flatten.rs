@@ -191,6 +191,8 @@ fn flatten_type2(ty2: &ast::Type2) -> FlattenResult<Node> {
         Type2::Map(g) => flatten_map(&g),
         Type2::Array(g) => flatten_array(&g),
         Type2::Unwrap(r) => Ok(Node::Unwrap(flatten_rule_generic(r)?)),
+        Type2::ChoiceifyInline(g) => flatten_choiceify_inline(&g),
+        Type2::Choiceify(r) => flatten_choiceify(r),
     }
 }
 
@@ -277,8 +279,8 @@ fn flatten_typename(name: &str) -> FlattenResult<Node> {
 }
 
 // Similar to flatten_name_generic, but if a prelude type is detected,
-// it returns an error.  This is for the "unwrap" operator, which can
-// only be used on group references, not prelude types.
+// it returns an error.  This is for the "unwrap" and "choiceify" operators,
+// which can only be used on group references, not prelude types.
 //
 // This code doesn't validate that the rule name is actually a group; that
 // will happen later.
@@ -450,6 +452,16 @@ fn flatten_memberkey(memberkey: &ast::MemberKey) -> FlattenResult<Node> {
         MemberKeyVal::Type1(t1) => flatten_type1(&t1),
         MemberKeyVal::Value(v) => flatten_value(&v),
     }
+}
+
+fn flatten_choiceify(name: &ast::NameGeneric) -> FlattenResult<Node> {
+    let rule = flatten_rule_generic(name)?;
+    Ok(Node::Choiceify(rule))
+}
+
+fn flatten_choiceify_inline(group: &ast::Group) -> FlattenResult<Node> {
+    let kvs = flatten_group(group)?;
+    Ok(Node::ChoiceifyInline(Array { members: kvs }))
 }
 
 // Useful utilities for testing the flatten code.

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 #[rustfmt::skip] // allow arbitrary indents for readability
 pub mod cbor {
-    // example values from rfc7049 appendix A
+    // Mostly example values from rfc7049 appendix A
     pub const BOOL_FALSE:   &[u8] = b"\xF4";
     pub const BOOL_TRUE:    &[u8] = b"\xF5";
     pub const NULL:         &[u8] = b"\xF6";
@@ -14,6 +14,7 @@ pub mod cbor {
 
     pub const INT_0:        &[u8] = b"\x00";
     pub const INT_1:        &[u8] = b"\x01";
+    pub const INT_9:        &[u8] = b"\x09";
     pub const INT_23:       &[u8] = b"\x17";
     pub const INT_24:       &[u8] = b"\x18\x18";
     pub const INT_1T:       &[u8] = b"\x1b\x00\x00\x00\xe8\xd4\xa5\x10\x00";
@@ -26,6 +27,7 @@ pub mod cbor {
 
     pub const ARRAY_EMPTY:  &[u8] = b"\x80";              // []
     pub const ARRAY_123:    &[u8] = b"\x83\x01\x02\x03";  // [1,2,3]
+    pub const ARRAY_12:     &[u8] = b"\x82\x01\x02";  // [1,2]
     pub const ARRAY_1_23_45:&[u8] = b"\x83\x01\x82\x02\x03\x82\x04\x05";  // [1, [2, 3], [4, 5]]
 
     pub const TEXT_EMPTY:   &[u8] = b"\x60";
@@ -282,6 +284,12 @@ fn validate_cbor_array_groups() {
     let cddl_input = r#"thing = [int, (int, int)]"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
 
+    // Naming a group causes it to be inlined.
+    let cddl_input = r#"thing = [int, foo] foo = (int, int)"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_12).err_mismatch();
+
     let cddl_input = r#"thing = [(int, int, int)]"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
 
@@ -299,7 +307,7 @@ fn validate_cbor_array_groups() {
     let cddl_input = r#"thing = [* (int, int)]"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap();
     // Shouldn't match because three doesn't go into two evenly.
-    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
+    validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).err_mismatch();
 
     let cddl_input = r#"thing = [a: int, b: int, bar] bar = (c: int)"#;
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap();
@@ -593,6 +601,32 @@ fn validate_choice_example() {
     let input = Pickup { per_pickup: true };
     let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
     validate_cbor_bytes("address", cddl_input, &cbor_bytes).unwrap();
+}
+
+#[test]
+fn validate_choiceify_example() {
+    // This is an example from RFC8610 2.2.2
+    // The only modification from the RFC example is to substitute "_" for "-" in barewords,
+    // for compatibility with serde_cbor.
+    let cddl_input = r#"
+        terminal-color = &basecolors
+        basecolors = (
+            black: 0,  red: 1,  green: 2,  yellow: 3,
+            blue: 4,  magenta: 5,  cyan: 6,  white: 7,
+        )
+        extended-color = &(
+            basecolors,
+            orange: 8,  pink: 9,  purple: 10,  brown: 11,
+        )"#;
+
+    // This tests the & operator against a named rule
+    validate_cbor_bytes("terminal-color", cddl_input, cbor::INT_1).unwrap();
+    validate_cbor_bytes("terminal-color", cddl_input, cbor::INT_23).err_mismatch();
+
+    // This tests the & operator against an inline group.
+    validate_cbor_bytes("extended-color", cddl_input, cbor::INT_1).unwrap();
+    validate_cbor_bytes("extended-color", cddl_input, cbor::INT_9).unwrap();
+    validate_cbor_bytes("extended-color", cddl_input, cbor::INT_23).err_mismatch();
 }
 
 #[test]

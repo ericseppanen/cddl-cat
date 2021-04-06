@@ -718,3 +718,160 @@ fn json_infinite_recursion() {
     let cddl_input = r#"thing1 = thing2  thing2 = thing1"#;
     validate_json_str("thing1", cddl_input, "0").unwrap_err();
 }
+
+#[test]
+fn json_choiceify_map() {
+    let cddl_input = r#"
+        person = { name: tstr, age: uint, &extra }
+        extra = ( aaa: bbb, ccc: ddd )
+        aaa = ( one: tstr )
+        bbb = ( two: tstr )
+        ccc = ( three: tstr )
+        ddd = ( four: tstr )
+    "#;
+
+    // Group-into-choice discards the key and only uses the value.
+    // So the keys "one" and "three" are ignored.
+    // The values "two" and "four" must refer to a group to make
+    // sense in a map context.
+    let json = r#"{"name": "Alice", "age": 33 }"#;
+    validate_json_str("person", cddl_input, json).err_mismatch();
+    let json = r#"{"name": "Alice", "age": 33, "one": "X" }"#;
+    validate_json_str("person", cddl_input, json).err_mismatch();
+    let json = r#"{"name": "Alice", "age": 33, "two": "X" }"#;
+    validate_json_str("person", cddl_input, json).unwrap();
+    let json = r#"{"name": "Alice", "age": 33, "three": "X" }"#;
+    validate_json_str("person", cddl_input, json).err_mismatch();
+    let json = r#"{"name": "Alice", "age": 33, "four": "X" }"#;
+    validate_json_str("person", cddl_input, json).unwrap();
+    let json = r#"{"name": "Alice", "four": "X" }"#;
+    validate_json_str("person", cddl_input, json).err_mismatch();
+
+    // With an extra level of name indirection
+    let cddl_input = r#"
+        person = { name: tstr, age: uint, &extra1 }
+        extra1 = extra2
+        extra2 = ( aaa: bbb, ccc: ddd )
+        aaa = ( one: tstr )
+        bbb = ( two: tstr )
+        ccc = ( three: tstr )
+        ddd = ( four: tstr )
+    "#;
+    let json = r#"{"name": "Alice", "age": 33, "one": "X" }"#;
+    validate_json_str("person", cddl_input, json).err_mismatch();
+    let json = r#"{"name": "Alice", "age": 33, "two": "X" }"#;
+    validate_json_str("person", cddl_input, json).unwrap();
+    let json = r#"{"name": "Alice", "age": 33, "three": "X" }"#;
+    validate_json_str("person", cddl_input, json).err_mismatch();
+    let json = r#"{"name": "Alice", "age": 33, "four": "X" }"#;
+    validate_json_str("person", cddl_input, json).unwrap();
+
+    // FIXME: this doesn't work correctly
+    if false {
+        // Testing the inline choiceify
+        let cddl_input = r#"
+            person = { name: tstr, age: uint, &(aaa: bbb, ccc: ddd) }
+            aaa = ( one: tstr )
+            bbb = ( two: tstr )
+            ccc = ( three: tstr )
+            ddd = ( four: tstr )
+        "#;
+        let json = r#"{"name": "Alice", "age": 33 }"#;
+        validate_json_str("person", cddl_input, json).err_mismatch();
+        let json = r#"{"name": "Alice", "age": 33, "one": "X" }"#;
+        validate_json_str("person", cddl_input, json).err_mismatch();
+        let json = r#"{"name": "Alice", "age": 33, "two": "X" }"#;
+        validate_json_str("person", cddl_input, json).unwrap();
+        let json = r#"{"name": "Alice", "age": 33, "three": "X" }"#;
+        validate_json_str("person", cddl_input, json).err_mismatch();
+        let json = r#"{"name": "Alice", "age": 33, "four": "X" }"#;
+        validate_json_str("person", cddl_input, json).unwrap();
+        let json = r#"{"name": "Alice", "four": "X" }"#;
+        validate_json_str("person", cddl_input, json).err_mismatch();
+    }
+
+    // A group should be able to include another group by name.
+    // FIXME: Also try this without the key "thing1", since it's ignored anyway.
+    let cddl_input = r#"
+        map = { top: tstr, &groupa }
+        groupa = ( thing1: groupb )
+        groupb = ( choice1: uint )
+    "#;
+    let json = r#"{ "top": "yes", "choice1": 99 }"#;
+    validate_json_str("map", cddl_input, json).unwrap();
+
+    // FIXME: this doesn't work when "groupb" is a value without a key.
+    if false {
+        let cddl_input = r#"
+            map = { top: tstr, &groupa }
+            groupa = ( groupb )
+            groupb = ( choice1: uint )
+        "#;
+        let json = r#"{ "top": "yes", "choice1": 99 }"#;
+        validate_json_str("map", cddl_input, json).unwrap();
+    }
+
+    // FIXME: this doesn't work, due to the "groupb" addition.
+    // I think it's because map validation doesn't correctly handle groups
+    // referring to other groups by name
+    if false {
+        let cddl_input = r#"
+            map = { top: tstr, &groupa }
+            groupa = ( thing1: groupb )
+            groupb = ( choice1: uint, groupc )
+            groupc = ( choice2: uint )
+        "#;
+        let json = r#"{ "top": "yes", "choice1": 99 }"#;
+        validate_json_str("map", cddl_input, json).unwrap();
+    }
+
+    // Trying to choiceify something that's not a group
+    let cddl_input = r#"
+        map = { &oops }
+        oops = { one: 1, two: 2 }
+    "#;
+    let json = r#"{ "test": 99 }"#;
+    validate_json_str("map", cddl_input, json).err_structural();
+}
+
+#[test]
+fn json_choiceify_array() {
+    let cddl_input = r#"
+        triple = [ tstr, bool, &primes ]
+        primes = (2, 3, 5, more_primes)
+        more_primes = (7, 11)
+    "#;
+
+    // Group-into-choice discards the key and only uses the value.
+    // So the keys "one" and "three" are ignored.
+    // The values "two" and "four" must refer to a group to make
+    // sense in a map context.
+    let json = r#"[ "foo", true, 2 ]"#;
+    validate_json_str("triple", cddl_input, json).unwrap();
+    let json = r#"[ "foo", true, 11 ]"#;
+    validate_json_str("triple", cddl_input, json).unwrap();
+    let json = r#"[ "foo", true ]"#;
+    validate_json_str("triple", cddl_input, json).err_mismatch();
+    let json = r#"[ "foo", true, 4 ]"#;
+    validate_json_str("triple", cddl_input, json).err_mismatch();
+
+    // Multiple layers of name redirection
+    let cddl_input = r#"
+        array = [ &primes ]
+        primes = more_primes
+        more_primes = (2, 3, 5)
+    "#;
+    let json = r#"[ 2 ]"#;
+    validate_json_str("array", cddl_input, json).unwrap();
+
+    let json = r#"[ 4 ]"#;
+    validate_json_str("array", cddl_input, json).err_mismatch();
+
+    // Trying to choiceify something that's not a group
+    let cddl_input = r#"
+        array = [ &oops ]
+        oops = [2, 3, 5]
+    "#;
+    let json = r#"[ 2 ]"#;
+    validate_json_str("array", cddl_input, json).err_structural();
+}

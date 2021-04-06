@@ -338,6 +338,8 @@ fn validate(value: &Value, node: &Node, ctx: &Context) -> ValidateResult {
         Node::Unwrap(_) => Err(ValidateError::Structural("unexpected Unwrap".into())),
         Node::Range(r) => validate_range(r, value, ctx),
         Node::Control(ctl) => validate_control(ctl, value, ctx),
+        Node::Choiceify(r) => validate_choiceify(r, value, ctx),
+        Node::ChoiceifyInline(a) => validate_choiceify_inline(a, value, ctx),
     }
 }
 
@@ -757,27 +759,10 @@ fn validate_map_member(
             working_map.commit();
             Ok(())
         }
-        Node::Choice(c) => {
-            // We need to explore each of the possible choices.
-            for option in &c.options {
-                match validate_map_member(option, working_map, ctx) {
-                    Ok(()) => {
-                        return Ok(());
-                    }
-                    Err(e) => {
-                        // We can keep trying other options as long as the
-                        // error is a Mismatch, not a MapCut or something
-                        // fatal.
-                        if !e.is_mismatch() {
-                            return Err(e);
-                        }
-                    }
-                }
-            }
-            // None of the choices worked.
-            let expected = format!("choice of {}", c.options.len());
-            Err(mismatch(expected))
-        }
+        Node::Choice(c) => validate_map_choice(&c.options, working_map, ctx),
+        Node::Choiceify(r) => validate_map_choiceify(r, working_map, ctx),
+        Node::ChoiceifyInline(a) => validate_map_choice(&a.members, working_map, ctx),
+
         // I don't think any of these are possible using CDDL grammar.
         Node::Literal(_) => Err(ValidateError::Structural("literal map member".into())),
         Node::PreludeType(_) => Err(ValidateError::Structural("prelude type map member".into())),
@@ -785,6 +770,102 @@ fn validate_map_member(
         Node::Array(_) => Err(ValidateError::Structural("array as map member".into())),
         Node::Range(_) => Err(ValidateError::Structural("range as map member".into())),
         Node::Control(_) => Err(ValidateError::Structural("control op as map member".into())),
+    }
+}
+
+fn validate_map_choice(
+    options: &Vec<Node>,
+    working_map: &mut WorkingMap,
+    ctx: &Context,
+) -> ValidateResult {
+    // We need to explore each of the possible choices.
+    for option in options {
+        match validate_map_member(option, working_map, ctx) {
+            Ok(()) => {
+                return Ok(());
+            }
+            Err(e) => {
+                // We can keep trying other options as long as the
+                // error is a Mismatch, not a MapCut or something
+                // fatal.
+                if !e.is_mismatch() {
+                    return Err(e);
+                }
+            }
+        }
+    }
+    // None of the choices worked.
+    let expected = format!("choice of {}", options.len());
+    Err(mismatch(expected))
+}
+
+// TODO: this duplicates a lot of code from validate_choiceify_members. Merge them?
+fn validate_map_choiceify_members(
+    choices: &Vec<Node>,
+    working_map: &mut WorkingMap,
+    ctx: &Context,
+) -> ValidateResult {
+    // Iterate over the input nodes. We expect a list of KeyValue variants.
+    // For each KeyValue, extract its .value member and try to validate that.
+    // Because we are in a group context, referring to other groups by name is
+    // also allowed; we will transparently unwrap those (recursively).
+
+    for item in choices {
+        let validate_result = match item {
+            Node::KeyValue(kv) => {
+                // Even though we're in a map, the choicify operation
+                // throws away the keys on its immediate operand.
+                // validate against the value (which is presumably
+                // a group containing KeyValues)
+                validate_map_member(&*kv.value, working_map, ctx)
+            }
+            Node::Rule(rule) => {
+                // A group may include another group by name.
+                validate_map_choiceify(rule, working_map, ctx)
+            }
+            _ => {
+                // The flatten code will simplify a key-less KeyValue
+                // to just a plain Node; handle that here.
+                validate_map_member(&item, working_map, ctx)
+            }
+        };
+
+        // This part is the same as validate_map_choice().
+        // If we matched, return Ok immediately.
+        // If we didn't, keep searching (unless the error is not a mismatch).
+        match validate_result {
+            Ok(()) => {
+                return Ok(());
+            }
+            Err(e) => {
+                // We can keep trying other options as long as the
+                // error is a Mismatch, not a MapCut or something
+                // fatal.
+                if !e.is_mismatch() {
+                    return Err(e);
+                }
+            }
+        }
+    }
+    let expected = format!("choiceified group of {}", choices.len());
+    Err(mismatch(expected))
+}
+
+/// Validate a "choice-ified group" (the CDDL "&" operator)
+///
+/// Each value in the named group will be used as a possible choice.
+fn validate_map_choiceify(
+    rule: &Rule,
+    working_map: &mut WorkingMap,
+    ctx: &Context,
+) -> ValidateResult {
+    let NodeContext { node, ctx } = ctx.lookup_rule(&rule)?;
+    match node {
+        Node::Group(g) => validate_map_choiceify_members(&g.members, working_map, &ctx),
+        Node::Rule(r) => validate_map_choiceify(r, working_map, &ctx),
+        _ => Err(ValidateError::Structural(
+            "improper map choiceify target".into(),
+        )),
     }
 }
 
@@ -1066,4 +1147,69 @@ fn validate_size_bstr(size: u64, value: &Value) -> ValidateResult {
         }
         _ => Err(mismatch("bstr")),
     }
+}
+
+fn validate_choiceify_members(choices: &Vec<Node>, value: &Value, ctx: &Context) -> ValidateResult {
+    // Iterate over the input nodes. We expect a list of KeyValue variants.
+    // For each KeyValue, extract its .value member and try to validate that.
+    // Because we are in a group context, referring to other groups by name is
+    // also allowed; we will transparently unwrap those (recursively).
+    for item in choices {
+        let validate_result = match item {
+            Node::KeyValue(kv) => validate(&value, &*kv.value, ctx),
+            Node::Rule(rule) => {
+                // A group may include another group by name. Handling this:
+                // Dereference the rule. If it leads to a Group, then
+                // recursively walk the nodes in that group. Otherwise,
+                // return an error.
+                validate_choiceify(rule, value, ctx)
+            }
+            _ => {
+                // Reading the CDDL spec, you might expect this case to be
+                // un-necessary. However, the flatten code always simplifies
+                // a keyless KeyValue node into just a value. Which means
+                // that any type might appear here.
+                validate(value, item, ctx)
+            }
+        };
+
+        // This part is the same as validate_choice().
+        // If we matched, return Ok immediately.
+        // If we didn't, keep searching (unless the error is fatal).
+        match validate_result {
+            Ok(()) => {
+                return Ok(());
+            }
+            Err(e) => {
+                // Only fail if the error is considered fatal.
+                // Otherwise, we'll keep trying other options.
+                if e.is_fatal() {
+                    return Err(e);
+                }
+            }
+        }
+    }
+    let expected = format!("choiceified group of {}", choices.len());
+    Err(mismatch(expected))
+}
+
+/// Validate a "choice-ified group" (the CDDL "&" operator)
+///
+/// Each value in the named group will be used as a possible choice.
+fn validate_choiceify(rule: &Rule, value: &Value, ctx: &Context) -> ValidateResult {
+    let NodeContext { node, ctx } = ctx.lookup_rule(&rule)?;
+    match node {
+        Node::Group(g) => validate_choiceify_members(&g.members, value, &ctx),
+        Node::Rule(r) => validate_choiceify(r, value, &ctx),
+        _ => Err(ValidateError::Structural(
+            "improper choiceify target".into(),
+        )),
+    }
+}
+
+/// Validate an inline "choice-ified group" (the CDDL "&" operator)
+///
+/// Each value in the inline group will be used as a possible choice.
+fn validate_choiceify_inline(array: &Array, value: &Value, ctx: &Context) -> ValidateResult {
+    validate_choiceify_members(&array.members, value, &ctx)
 }

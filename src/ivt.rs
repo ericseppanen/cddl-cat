@@ -412,6 +412,8 @@ pub enum Node {
     Unwrap(Rule),
     Range(Range),
     Control(Control),
+    Choiceify(Rule),
+    ChoiceifyInline(Array),
 }
 
 impl fmt::Display for Node {

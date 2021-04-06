@@ -92,6 +92,7 @@ Supported CDDL features:
 - Occurrences (`?`, `*`, `+`, or `m*n`)
 - Ranges (e.g. `1..7` or `1...8`)
 - Unwrapping (`~`)
+- Turn a group into a choice (`&`)
 - Map keys with cut syntax (`^ =>`)
 - Generic types
 - Control operator `.size`

@@ -170,6 +170,8 @@ pub enum Type2 {
     Map(Group),
     Array(Group),
     Unwrap(NameGeneric),
+    ChoiceifyInline(Group),
+    Choiceify(NameGeneric),
 }
 
 /// A CDDL type, with an additional range or control operator.
