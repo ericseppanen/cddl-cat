@@ -1,0 +1,13 @@
+version: 2.1
+
+orbs:
+  # Declare a dependency on the rust orb
+  rust: circleci/rust@1.5.0
+# Orchestrate or schedule a set of jobs
+workflows:
+  # Name the workflow "build_test"
+  build_test:
+    jobs:
+      - rust/lint-test-build:
+          release: true
+
