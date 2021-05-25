@@ -133,6 +133,7 @@ pub mod flatten;
 pub mod ivt;
 pub mod parser;
 pub mod util;
+#[doc(inline)]
 pub use util::{ValidateError, ValidateResult};
 pub(crate) mod validate;
 pub mod value;
@@ -140,11 +141,14 @@ pub mod value;
 #[cfg(feature = "serde_cbor")]
 pub mod cbor;
 #[cfg(feature = "serde_cbor")]
+#[doc(inline)]
 pub use cbor::{validate_cbor, validate_cbor_bytes};
 
 #[cfg(feature = "serde_json")]
 pub mod json;
 #[cfg(feature = "serde_json")]
+#[doc(inline)]
 pub use json::{validate_json, validate_json_str};
 
+#[doc(inline)]
 pub use parser::parse_cddl;
