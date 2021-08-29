@@ -20,7 +20,8 @@ use nom::{
         anychar, char as charx, digit0, digit1, hex_digit1, multispace1, not_line_ending, one_of,
     },
     combinator::{all_consuming, map, map_res, opt, recognize, value as valuex},
-    multi::{many0, many1, separated_nonempty_list},
+    error::FromExternalError,
+    multi::{many0, many1, separated_list1},
     sequence::{delimited, pair, preceded, separated_pair, terminated, tuple},
 };
 use std::convert::TryFrom;
@@ -71,6 +72,15 @@ pub struct ParseError {
     pub ctx: String,
 }
 
+impl<I, E> FromExternalError<I, E> for ParseError {
+    fn from_external_error(_input: I, _kind: nom::error::ErrorKind, _e: E) -> Self {
+        ParseError {
+            kind: ErrorKind::Unparseable,
+            ctx: String::from("nom-error"),
+        }
+    }
+}
+
 fn parse_error<S: Into<String>>(kind: ErrorKind, ctx: S) -> ParseError {
     ParseError {
         kind,
@@ -118,11 +128,11 @@ impl<I: Into<String>> nom::error::ParseError<I> for ParseError {
 // A workaround for the fact that nom::combinator::map_res discards the returned error type.
 // See also https://github.com/Geal/nom/issues/1171
 fn map_res_fail<I: Clone, O1, O2, E: nom::error::ParseError<I>, F, G>(
-    first: F,
+    mut first: F,
     second: G,
-) -> impl Fn(I) -> nom::IResult<I, O2, E>
+) -> impl FnMut(I) -> nom::IResult<I, O2, E>
 where
-    F: Fn(I) -> nom::IResult<I, O1, E>,
+    F: FnMut(I) -> nom::IResult<I, O1, E>,
     G: Fn(O1) -> Result<O2, E>,
 {
     move |input: I| {
@@ -390,10 +400,12 @@ fn offset(whole: &str, part: &str) -> usize {
 // This is similar to nom's `recognize` function.
 // The difference is that it doesn't throw away the inner parser's result;
 // it returns a tuple (slice, result) so you can have both.
-fn recognizer<'a, O, E, F>(parser: F) -> impl Fn(&'a str) -> nom::IResult<&'a str, (&'a str, O), E>
+fn recognizer<'a, O, E, F>(
+    mut parser: F,
+) -> impl FnMut(&'a str) -> nom::IResult<&'a str, (&'a str, O), E>
 where
     E: nom::error::ParseError<&'a str>,
-    F: Fn(&'a str) -> nom::IResult<&'a str, O, E>,
+    F: FnMut(&'a str) -> nom::IResult<&'a str, O, E>,
 {
     move |input: &'a str| {
         #[allow(clippy::clone_double_ref)]
@@ -861,10 +873,10 @@ fn grpchoice(input: &str) -> JResult<&str, GrpChoice> {
 fn group(input: &str) -> JResult<&str, Group> {
 
     // It would have been great to write this as
-    //  separated_nonempty_list(
+    //  separated_list1(
     //      tag("//"),
     //      grpchoice)
-    // but separated_nonempty_list returns an error if the
+    // but separated_list1 returns an error if the
     // list-item succeeds on "", which grpchoice does.
 
     let f = pair(
@@ -1069,7 +1081,7 @@ fn type1(input: &str) -> JResult<&str, Type1> {
 // type = type1 [ / type1 ... ]  (skipping over type1 for now)
 #[rustfmt::skip]
 fn ty(input: &str) -> JResult<&str, Type> {
-    let f = separated_nonempty_list(
+    let f = separated_list1(
         delimited(ws, tag("/"), ws),
         type1
     );
@@ -1115,7 +1127,7 @@ fn rule_val(input: &str) -> JResult<&str, RuleVal> {
 fn generic_parm(input: &str) -> JResult<&str, Vec<&str>> {
     delimited(
         pair(tag("<"), ws),
-        separated_nonempty_list(
+        separated_list1(
             pair(tag(","), ws),
             terminated(ident, ws)),
         tag(">"),
@@ -1127,7 +1139,7 @@ fn generic_parm(input: &str) -> JResult<&str, Vec<&str>> {
 fn generic_arg(input: &str) -> JResult<&str, Vec<Type1>> {
     delimited(
         pair(tag("<"), ws),
-        separated_nonempty_list(
+        separated_list1(
             pair(tag(","), ws),
             terminated(type1, ws)),
         tag(">"),
