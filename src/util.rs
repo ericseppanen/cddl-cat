@@ -8,7 +8,7 @@ use std::result::Result;
 
 /// A basic error type that contains a string.
 #[allow(missing_docs)]
-#[rustversion::attr(since(1.40), non_exhaustive)]
+#[non_exhaustive]
 #[derive(Debug, PartialEq)]
 pub enum ValidateError {
     /// An error during CDDL parsing.
@@ -116,7 +116,7 @@ pub trait ErrorMatch {
 }
 
 impl ErrorMatch for ValidateResult {
-    #[rustversion::attr(since(1.46), track_caller)]
+    #[track_caller]
     fn err_mismatch(&self) {
         match self {
             Err(ValidateError::Mismatch(_)) => (),
@@ -124,7 +124,7 @@ impl ErrorMatch for ValidateResult {
         }
     }
 
-    #[rustversion::attr(since(1.46), track_caller)]
+    #[track_caller]
     fn err_missing_rule(&self) {
         match self {
             Err(ValidateError::MissingRule(_)) => (),
@@ -132,7 +132,7 @@ impl ErrorMatch for ValidateResult {
         }
     }
 
-    #[rustversion::attr(since(1.46), track_caller)]
+    #[track_caller]
     fn err_generic(&self) {
         match self {
             Err(ValidateError::GenericError) => (),
@@ -140,7 +140,7 @@ impl ErrorMatch for ValidateResult {
         }
     }
 
-    #[rustversion::attr(since(1.46), track_caller)]
+    #[track_caller]
     fn err_parse(&self) {
         match self {
             Err(ValidateError::ParseError(_)) => (),
@@ -148,7 +148,7 @@ impl ErrorMatch for ValidateResult {
         }
     }
 
-    #[rustversion::attr(since(1.46), track_caller)]
+    #[track_caller]
     fn err_structural(&self) {
         match self {
             Err(ValidateError::Structural(_)) => (),

@@ -371,7 +371,7 @@ impl fmt::Display for Range {
 /// A control operator constrains a type by adding an additional condition
 /// that must be met. For example, "tstr .size 10" permits only strings of
 /// 10 bytes or less.  See RFC 8610 section 3.8 for details.
-#[rustversion::attr(since(1.40), non_exhaustive)]
+#[non_exhaustive]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Control {
     /// Limit the size in bytes.

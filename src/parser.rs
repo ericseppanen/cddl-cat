@@ -41,7 +41,7 @@ use std::fmt;
 type JResult<I, O> = nom::IResult<I, O, ParseError>;
 
 /// The "kind" of error generated during CDDL parsing.
-#[rustversion::attr(since(1.40), non_exhaustive)]
+#[non_exhaustive]
 #[derive(Debug, PartialEq)]
 pub enum ErrorKind {
     /// An integer didn't parse correctly.

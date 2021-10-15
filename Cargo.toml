@@ -21,7 +21,6 @@ serde = "1.0"
 # nom's default-features are ["std", "lexical"].
 nom = { version = "7", features = ["std"], default-features = false }
 hex = "0.4"
-rustversion = "1.0"
 strum_macros = "0.21"
 escape8259 = "0.5"
 base64 = "0.13"
