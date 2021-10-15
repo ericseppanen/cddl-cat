@@ -25,7 +25,7 @@
 //!   a generic form, so most of the validation code is completely agnostic
 //!   to the serialization format.
 //!
-//! - Validation code uses a [`LookupContext`](context::LookupContext) object
+//! - Validation code uses a [`LookupContext`](crate::context::LookupContext) object
 //!   to perform all rule lookups. This will allow stacking CDDL documents or
 //!   building CDDL libraries that can be used by other CDDL schemas.  In the
 //!   future the validation process itself may be customized by changing the
