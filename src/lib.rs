@@ -15,20 +15,21 @@
 //! - Supports CBOR and JSON encodings, controlled by the `serde_cbor` and
 //!   `serde_json` features.
 //!
-//! - An "Intermediate Validation Tree" ([`ivt`]) is constructed from the CDDL
-//!   AST; this removes some of the CDDL syntax detail resulting in a
-//!   simplified tree that can be more easily validated.
-//!   The IVT is constructed almost entirely of [`Node`] elements, allowing
-//!   recursive validation.
+//! - An "Intermediate Validation Tree" ([`ivt`](crate::ivt)) is constructed
+//!   from the CDDL AST; this removes some of the CDDL syntax detail resulting
+//!   in a simplified tree that can be more easily validated. The IVT is
+//!   constructed almost entirely of [`Node`](crate::ivt::Node) elements,
+//!   allowing recursive validation.
 //!
 //! - Validation is performed by first translating the incoming data into
 //!   a generic form, so most of the validation code is completely agnostic
 //!   to the serialization format.
 //!
-//! - Validation code uses a [`LookupContext`] object to perform all rule lookups.
-//!   This will allow stacking CDDL documents or building CDDL libraries that
-//!   can be used by other CDDL schemas.  In the future the validation process
-//!   itself may be customized by changing the `LookupContext` configuration.
+//! - Validation code uses a [`LookupContext`](context::LookupContext) object
+//!   to perform all rule lookups. This will allow stacking CDDL documents or
+//!   building CDDL libraries that can be used by other CDDL schemas.  In the
+//!   future the validation process itself may be customized by changing the
+//!   `LookupContext` configuration.
 //!
 //! - Comprehensive tests (90%+ coverage).
 //!
@@ -100,7 +101,7 @@
 //! - Unwrapping (`~`)
 //! - Turn a group into a choice (`&`)
 //! - Map keys with cut syntax (`^ =>`)
-//! - Generics
+//! - Generic types
 //! - Control operator `.size`
 //!
 //! Unimplemented CDDL features:
@@ -114,8 +115,6 @@
 //! - Hexfloat literals (e.g. `0x1.921fb5p+1`)
 //! - Prelude types that invoke CBOR tags (e.g. `tdate` or `biguint`)
 //!
-//! [`Node`]: ivt::Node
-//! [`LookupContext`]: context::LookupContext
 //! [RFC8610]: https://tools.ietf.org/html/rfc8610
 //! [CBOR]: https://cbor.io/
 
