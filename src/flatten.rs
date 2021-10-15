@@ -60,8 +60,8 @@ pub fn slice_flatten(cddl: &ast::CddlSlice) -> FlattenResult<RulesWithStrings> {
 fn flatten_rule(rule: &ast::Rule) -> FlattenResult<(String, RuleDef)> {
     use ast::RuleVal;
     let node = match &rule.val {
-        RuleVal::AssignType(t) => flatten_type(&t)?,
-        RuleVal::AssignGroup(g) => flatten_groupentry(&g)?,
+        RuleVal::AssignType(t) => flatten_type(t)?,
+        RuleVal::AssignGroup(g) => flatten_groupentry(g)?,
     };
     let ruledef = RuleDef {
         generic_parms: rule.generic_parms.clone(),
@@ -188,10 +188,10 @@ fn flatten_type2(ty2: &ast::Type2) -> FlattenResult<Node> {
         Type2::Value(v) => flatten_value(v),
         Type2::Typename(s) => flatten_name_generic(s),
         Type2::Parethesized(t) => flatten_type(t),
-        Type2::Map(g) => flatten_map(&g),
-        Type2::Array(g) => flatten_array(&g),
+        Type2::Map(g) => flatten_map(g),
+        Type2::Array(g) => flatten_array(g),
         Type2::Unwrap(r) => Ok(Node::Unwrap(flatten_rule_generic(r)?)),
-        Type2::ChoiceifyInline(g) => flatten_choiceify_inline(&g),
+        Type2::ChoiceifyInline(g) => flatten_choiceify_inline(g),
         Type2::Choiceify(r) => flatten_choiceify(r),
     }
 }
@@ -300,7 +300,7 @@ fn flatten_name_generic(name_generic: &ast::NameGeneric) -> FlattenResult<Node> 
             // Add the args to the rule.
             for arg in &name_generic.generic_args {
                 // Need to flatten each individual generic arg.
-                let arg_node = flatten_type1(&arg)?;
+                let arg_node = flatten_type1(arg)?;
                 r.generic_args.push(arg_node);
             }
         }
@@ -419,7 +419,7 @@ fn flatten_member(member: &ast::Member) -> FlattenResult<Node> {
     match &member.key {
         Some(key) => {
             let cut = key.cut;
-            let key = flatten_memberkey(&key)?;
+            let key = flatten_memberkey(key)?;
             let value = flatten_type(&member.value)?;
             Ok(Node::KeyValue(KeyValue::new(key, value, cut)))
         }
@@ -449,8 +449,8 @@ fn flatten_memberkey(memberkey: &ast::MemberKey) -> FlattenResult<Node> {
             // marks.  Treat it just like we would a literal with quotes.
             Ok(literal_text(s.clone()))
         }
-        MemberKeyVal::Type1(t1) => flatten_type1(&t1),
-        MemberKeyVal::Value(v) => flatten_value(&v),
+        MemberKeyVal::Type1(t1) => flatten_type1(t1),
+        MemberKeyVal::Value(v) => flatten_value(v),
     }
 }
 

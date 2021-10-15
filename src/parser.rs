@@ -412,7 +412,7 @@ where
         let i = input.clone();
         match parser(i) {
             Ok((i, output)) => {
-                let index = offset(input, &i);
+                let index = offset(input, i);
                 let output_slice = &input[..index];
                 let output_tuple = (output_slice, output);
                 Ok((i, output_tuple))
@@ -1520,7 +1520,7 @@ mod tests {
         // Non-text bytes
         let result2 = vec![0u8, 0xFF, 1, 0x7F];
         assert_eq!(Ok(("", result2.clone())), bytestring("h'00FF017f'"));
-        assert_eq!(Ok(("", result2.clone())), bytestring("b64'AP8Bfw=='"));
+        assert_eq!(Ok(("", result2)), bytestring("b64'AP8Bfw=='"));
 
         // Empty inputs
         assert_eq!(Ok(("", vec![])), bytestring("h''"));
@@ -1799,7 +1799,7 @@ mod tests {
                 generic_parms: vec![],
                 val: RuleVal::AssignGroup(GrpEnt {
                     occur: None,
-                    val: GrpEntVal::Parenthesized(gen_group(vec!["bar", "baz"]).into()),
+                    val: GrpEntVal::Parenthesized(gen_group(vec!["bar", "baz"])),
                 })
             }
         );

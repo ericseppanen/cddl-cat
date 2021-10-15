@@ -234,7 +234,7 @@ impl WorkingMap {
         // If validate code is implemented correctly, then unwrap() should
         // never panic (we've already peeked at this value in order to match
         // it.)
-        let value = self.map.remove(&key).unwrap();
+        let value = self.map.remove(key).unwrap();
         // If there is a current snapshot, preserve this element
         // for later rewind.
         if let Some(snap) = self.snaps.back_mut() {
@@ -383,8 +383,8 @@ fn validate_choice(choice: &Choice, value: &Value, ctx: &Context) -> ValidateRes
 ///
 /// Seek out the right `Node` and `Context`, and recurse.
 fn validate_rule(rule: &Rule, value: &Value, ctx: &Context) -> ValidateResult {
-    let answer = ctx.lookup_rule(&rule)?;
-    validate(value, &answer.node, &answer.ctx)
+    let answer = ctx.lookup_rule(rule)?;
+    validate(value, answer.node, &answer.ctx)
 }
 
 /// Create a `Value` from a `Literal`.
@@ -528,14 +528,14 @@ fn validate_array_member(
             // BUG: Choice nodes will have the same problem.
 
             let answer = ctx.lookup_rule(r)?;
-            validate_array_member(&answer.node, working_array, &answer.ctx)
+            validate_array_member(answer.node, working_array, &answer.ctx)
         }
         Node::Unwrap(r) => {
             // Like Rule, we are dereferencing the Rule by hand here so that
             // we can "see through" to the underlying data without forgetting
             // we were in an array context.
             let answer = ctx.lookup_rule(r)?;
-            validate_array_unwrap(&answer.node, working_array, &answer.ctx)
+            validate_array_unwrap(answer.node, working_array, &answer.ctx)
         }
         Node::Choice(c) => {
             // We need to explore each of the possible choices.
@@ -719,14 +719,14 @@ fn validate_map_member(
             // we were in a map context.  We need to punch down a level into
             // the rule and match again.
             let answer = ctx.lookup_rule(r)?;
-            validate_map_member(&answer.node, working_map, &answer.ctx)
+            validate_map_member(answer.node, working_map, &answer.ctx)
         }
         Node::Unwrap(r) => {
             // Like Rule, we are dereferencing the Rule by hand here so that
             // we can "see through" to the underlying data without forgetting
             // we were in a map context.
             let answer = ctx.lookup_rule(r)?;
-            validate_map_unwrap(&answer.node, working_map, &answer.ctx)
+            validate_map_unwrap(answer.node, working_map, &answer.ctx)
         }
         Node::Group(g) => {
             // As we call validate_array_member, we don't know how many items
@@ -774,7 +774,7 @@ fn validate_map_member(
 }
 
 fn validate_map_choice(
-    options: &Vec<Node>,
+    options: &[Node],
     working_map: &mut WorkingMap,
     ctx: &Context,
 ) -> ValidateResult {
@@ -801,7 +801,7 @@ fn validate_map_choice(
 
 // TODO: this duplicates a lot of code from validate_choiceify_members. Merge them?
 fn validate_map_choiceify_members(
-    choices: &Vec<Node>,
+    choices: &[Node],
     working_map: &mut WorkingMap,
     ctx: &Context,
 ) -> ValidateResult {
@@ -826,7 +826,7 @@ fn validate_map_choiceify_members(
             _ => {
                 // The flatten code will simplify a key-less KeyValue
                 // to just a plain Node; handle that here.
-                validate_map_member(&item, working_map, ctx)
+                validate_map_member(item, working_map, ctx)
             }
         };
 
@@ -859,7 +859,7 @@ fn validate_map_choiceify(
     working_map: &mut WorkingMap,
     ctx: &Context,
 ) -> ValidateResult {
-    let NodeContext { node, ctx } = ctx.lookup_rule(&rule)?;
+    let NodeContext { node, ctx } = ctx.lookup_rule(rule)?;
     match node {
         Node::Group(g) => validate_map_choiceify_members(&g.members, working_map, &ctx),
         Node::Rule(r) => validate_map_choiceify(r, working_map, &ctx),
@@ -984,7 +984,7 @@ fn deref_range_rule(node: &Node, ctx: &Context) -> TempResult<Literal> {
         Node::Literal(l) => Ok(l.clone()),
         Node::Rule(r) => {
             let answer = ctx.lookup_rule(r)?;
-            deref_range_rule(&answer.node, &answer.ctx)
+            deref_range_rule(answer.node, &answer.ctx)
         }
         _ => Err(ValidateError::Structural(
             "confusing type on range operator".into(),
@@ -1046,7 +1046,7 @@ where
     R: 'static,
 {
     if let Node::Rule(rule) = node {
-        let answer = ctx.lookup_rule(&rule)?;
+        let answer = ctx.lookup_rule(rule)?;
         chase_rules(answer.node, &answer.ctx, f)
     } else {
         f(node)
@@ -1149,14 +1149,14 @@ fn validate_size_bstr(size: u64, value: &Value) -> ValidateResult {
     }
 }
 
-fn validate_choiceify_members(choices: &Vec<Node>, value: &Value, ctx: &Context) -> ValidateResult {
+fn validate_choiceify_members(choices: &[Node], value: &Value, ctx: &Context) -> ValidateResult {
     // Iterate over the input nodes. We expect a list of KeyValue variants.
     // For each KeyValue, extract its .value member and try to validate that.
     // Because we are in a group context, referring to other groups by name is
     // also allowed; we will transparently unwrap those (recursively).
     for item in choices {
         let validate_result = match item {
-            Node::KeyValue(kv) => validate(&value, &*kv.value, ctx),
+            Node::KeyValue(kv) => validate(value, &*kv.value, ctx),
             Node::Rule(rule) => {
                 // A group may include another group by name. Handling this:
                 // Dereference the rule. If it leads to a Group, then
@@ -1197,7 +1197,7 @@ fn validate_choiceify_members(choices: &Vec<Node>, value: &Value, ctx: &Context)
 ///
 /// Each value in the named group will be used as a possible choice.
 fn validate_choiceify(rule: &Rule, value: &Value, ctx: &Context) -> ValidateResult {
-    let NodeContext { node, ctx } = ctx.lookup_rule(&rule)?;
+    let NodeContext { node, ctx } = ctx.lookup_rule(rule)?;
     match node {
         Node::Group(g) => validate_choiceify_members(&g.members, value, &ctx),
         Node::Rule(r) => validate_choiceify(r, value, &ctx),
@@ -1211,5 +1211,5 @@ fn validate_choiceify(rule: &Rule, value: &Value, ctx: &Context) -> ValidateResu
 ///
 /// Each value in the inline group will be used as a possible choice.
 fn validate_choiceify_inline(array: &Array, value: &Value, ctx: &Context) -> ValidateResult {
-    validate_choiceify_members(&array.members, value, &ctx)
+    validate_choiceify_members(&array.members, value, ctx)
 }

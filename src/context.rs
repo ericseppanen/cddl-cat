@@ -39,7 +39,7 @@ impl BasicContext {
 impl LookupContext for BasicContext {
     fn lookup_rule<'a>(&'a self, name: &str) -> LookupResult<'a> {
         match self.rules.get(name) {
-            Some(rule_def) => Ok(&rule_def),
+            Some(rule_def) => Ok(rule_def),
             None => Err(ValidateError::MissingRule(name.into())),
         }
     }
