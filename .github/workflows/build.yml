@@ -10,7 +10,7 @@ jobs:
   cargo-build:
     strategy:
       matrix:
-        rust_toolchain: [stable, nightly, 1.37.0]
+        rust_toolchain: [stable, nightly, 1.48.0]
         os: [ubuntu-latest]
 
     name: Build

@@ -8,7 +8,7 @@ method; it can be used to validate data that is in [CBOR] or JSON format.
 The goal of this library is to make CBOR or JSON data easy to validate
 against a CDDL schema description.
 
-`cddl-cat` supports Rust 1.37 and later.
+`cddl-cat` supports Rust 1.48 and later.
 
 # Implementation Details
 
