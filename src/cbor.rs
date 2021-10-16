@@ -87,7 +87,7 @@ impl TryFrom<&CBOR_Value> for Value {
             }
             CBOR_Value::Map(m) => {
                 type MapTree = BTreeMap<Value, Value>;
-                let map: Result<MapTree, _> = m
+                let map: Result<MapTree, ValidateError> = m
                     .iter()
                     .map(|(k, v)| {
                         // An iterator returning a 2-tuple can be used as (key, value)

@@ -18,7 +18,7 @@ pub type FlattenResult<T> = std::result::Result<T, ValidateError>;
 
 /// Convert a CDDL schema in UTF-8 form into a structured rule set.
 pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
-    let cddl = parse_cddl(cddl_input).map_err(ValidateError::ParseError)?;
+    let cddl = parse_cddl(cddl_input)?;
     flatten(&cddl)
 }
 
@@ -27,7 +27,7 @@ pub fn flatten_from_str(cddl_input: &str) -> FlattenResult<RulesByName> {
 /// This works the same as `flatten_from_str`, but preserves a copy of the original
 /// CDDL text alongside the IVT.
 pub fn slice_flatten_from_str(cddl_input: &str) -> FlattenResult<RulesWithStrings> {
-    let cddl = slice_parse_cddl(cddl_input).map_err(ValidateError::ParseError)?;
+    let cddl = slice_parse_cddl(cddl_input)?;
     slice_flatten(&cddl)
 }
 

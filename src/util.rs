@@ -2,17 +2,17 @@
 //!
 
 use crate::parser;
-use std::error;
 use std::fmt;
 use std::result::Result;
+use thiserror::Error;
 
 /// A basic error type that contains a string.
 #[allow(missing_docs)]
 #[non_exhaustive]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Error)]
 pub enum ValidateError {
     /// An error during CDDL parsing.
-    ParseError(parser::ParseError),
+    ParseError(#[from] parser::ParseError),
     /// A logical error in the CDDL structure.
     Structural(String),
     /// A data mismatch during validation.
@@ -91,13 +91,6 @@ impl fmt::Display for ValidateError {
             ValueError(msg) => write!(f, "ValueError({})", msg),
             GenericError => write!(f, "GenericError"),
         }
-    }
-}
-
-// Standard boilerplate, required so other errors can wrap this one.
-impl error::Error for ValidateError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        None
     }
 }
 

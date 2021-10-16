@@ -54,7 +54,7 @@ impl TryFrom<&JSON_Value> for Value {
             }
             JSON_Value::Object(m) => {
                 type MapTree = BTreeMap<Value, Value>;
-                let map: Result<MapTree, _> = m
+                let map: Result<MapTree, ValidateError> = m
                     .iter()
                     .map(|(k, v)| {
                         // An iterator returning a 2-tuple can be used as (key, value)
