@@ -2,7 +2,6 @@
 //!
 
 use crate::parser;
-use std::fmt;
 use std::result::Result;
 use thiserror::Error;
 
@@ -12,20 +11,31 @@ use thiserror::Error;
 #[derive(Debug, PartialEq, Error)]
 pub enum ValidateError {
     /// An error during CDDL parsing.
+    #[error(transparent)]
     ParseError(#[from] parser::ParseError),
     /// A logical error in the CDDL structure.
+    #[error("Structural({0})")]
     Structural(String),
     /// A data mismatch during validation.
+    // The difference between Mismatch and MapCut is that they trigger
+    // slightly different internal behaivor; to a human reader they mean
+    // the same thing so we will Display them the same way.
+    #[error("Mismatch(expected {})", .0.expected)]
     Mismatch(Mismatch),
     /// A map key-value cut error.
+    #[error("Mismatch(expected {})", .0.expected)]
     MapCut(Mismatch),
     /// A CDDL rule lookup failed.
+    #[error("MissingRule({0})")]
     MissingRule(String),
     /// A CDDL feature that is unsupported.
+    #[error("Unsupported {0}")]
     Unsupported(String),
     /// A data value that can't be validated by CDDL.
+    #[error("ValueError({0})")]
     ValueError(String),
     /// A generic type parameter was used incorrectly.
+    #[error("GenericError")]
     GenericError,
 }
 
@@ -73,25 +83,6 @@ pub fn mismatch<E: Into<String>>(expected: E) -> ValidateError {
     ValidateError::Mismatch(Mismatch {
         expected: expected.into(),
     })
-}
-
-impl fmt::Display for ValidateError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        use ValidateError::*;
-        match self {
-            ParseError(p) => p.fmt(f),
-            Structural(msg) => write!(f, "Structural({})", msg),
-            // The difference between Mismatch and MapCut is that they trigger
-            // slightly different internal behaivor; to a human reader they mean
-            // the same thing so we will Display them the same way.
-            Mismatch(mismatch) => write!(f, "Mismatch(expected {})", mismatch.expected),
-            MapCut(mismatch) => write!(f, "Mismatch(expected {})", mismatch.expected),
-            MissingRule(rule) => write!(f, "MissingRule({})", rule),
-            Unsupported(msg) => write!(f, "Unsupported {}", msg),
-            ValueError(msg) => write!(f, "ValueError({})", msg),
-            GenericError => write!(f, "GenericError"),
-        }
-    }
 }
 
 /// A validation that doesn't return anything.
