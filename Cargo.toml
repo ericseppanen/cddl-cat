@@ -9,6 +9,7 @@ license = "MIT"
 authors = ["Eric Seppanen <eds@reric.net>"]
 readme = "README.md"
 edition = "2018"
+rust-version = "1.48"
 
 [features]
 default = ["serde_json", "serde_cbor"]
