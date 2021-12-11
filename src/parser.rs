@@ -548,7 +548,7 @@ fn parse_hex(s: &str) -> Result<Vec<u8>, CowParseError> {
 fn bytestring(input: &str) -> JResult<&str, Vec<u8>> {
     alt((
         map(bytestring_utf8, |s| s.as_bytes().into()),
-        map_res_fail(bytestring_hex, |s| parse_hex(s)),
+        map_res_fail(bytestring_hex, parse_hex),
         map_res_fail(bytestring_base64, |s| {
             base64::decode_config(s, base64::URL_SAFE).map_err(|_| {
                 parse_error(MalformedBase64, s)

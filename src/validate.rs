@@ -13,24 +13,13 @@ use std::convert::TryInto;
 use std::mem::discriminant;
 
 // A map from generic parameter name to the type being used here.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 struct GenericMap<'a> {
     map: HashMap<String, &'a Node>,
     // Because we captured this map at a previous time, we may need to look up
     // generic types from that previous context.  We carry a copy of that
     // Context with us to do those lookups.
     past_ctx: Option<&'a Context<'a>>,
-}
-
-// At the top level of a validation, we won't have any past_ctx
-// because there cannot be any generic parameter map.
-impl Default for GenericMap<'_> {
-    fn default() -> Self {
-        Self {
-            map: HashMap::default(),
-            past_ctx: None,
-        }
-    }
 }
 
 #[derive(Clone)]

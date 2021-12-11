@@ -34,7 +34,7 @@ pub fn slice_flatten_from_str(cddl_input: &str) -> FlattenResult<RulesWithString
 /// Convert an already-parsed cddl AST into a `(name, rules)` map.
 pub fn flatten(cddl: &ast::Cddl) -> FlattenResult<RulesByName> {
     // This first pass generates a tree of Nodes from the AST.
-    cddl.rules.iter().map(|rule| flatten_rule(rule)).collect()
+    cddl.rules.iter().map(flatten_rule).collect()
 }
 
 /// Convert an already-parsed cddl AST into a `(name, (rule, rule-string))` map.
@@ -71,7 +71,7 @@ fn flatten_rule(rule: &ast::Rule) -> FlattenResult<(String, RuleDef)> {
 }
 
 fn flatten_type(ty: &ast::Type) -> FlattenResult<Node> {
-    let options: FlattenResult<Vec<Node>> = ty.0.iter().map(|type1| flatten_type1(type1)).collect();
+    let options: FlattenResult<Vec<Node>> = ty.0.iter().map(flatten_type1).collect();
     let options = options?;
 
     match options.len() {
@@ -351,10 +351,7 @@ fn flatten_group(group: &ast::Group) -> FlattenResult<Vec<Node>> {
 
 fn flatten_groupchoice(groupchoice: &ast::GrpChoice) -> FlattenResult<Vec<Node>> {
     let group_entries = &groupchoice.0;
-    let kvs: FlattenResult<Vec<Node>> = group_entries
-        .iter()
-        .map(|group_entry| flatten_groupentry(group_entry))
-        .collect();
+    let kvs: FlattenResult<Vec<Node>> = group_entries.iter().map(flatten_groupentry).collect();
     kvs
 }
 
