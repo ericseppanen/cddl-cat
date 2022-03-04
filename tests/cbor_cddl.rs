@@ -2,6 +2,7 @@
 
 use cddl_cat::cbor::validate_cbor_bytes;
 use cddl_cat::util::ErrorMatch;
+use cddl_cat::ValidateResult;
 use serde::{Deserialize, Serialize};
 
 #[rustfmt::skip] // allow arbitrary indents for readability
@@ -689,4 +690,50 @@ fn cbor_control_size() {
 
     let cddl_input = r#"thing = bstr .size -1"#;
     validate_cbor_bytes("thing", cddl_input, cbor::BYTES_EMPTY).unwrap_err();
+}
+
+#[track_caller]
+fn validate_cbor_tstr(name: &str, cddl: &str, input: &str) -> ValidateResult {
+    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    validate_cbor_bytes(name, cddl, &cbor_bytes)
+}
+
+#[test]
+fn cbor_control_regexp() {
+    // Should match strings that look like integers with no leading zeroes.
+    let cddl_input = r#" nolz = tstr .regexp "^(0|[1-9][0-9]*)$" "#;
+    validate_cbor_tstr("nolz", cddl_input, "0").unwrap();
+    validate_cbor_tstr("nolz", cddl_input, "1").unwrap();
+    validate_cbor_tstr("nolz", cddl_input, "20").unwrap();
+    validate_cbor_tstr("nolz", cddl_input, "23").unwrap();
+    validate_cbor_tstr("nolz", cddl_input, "123").unwrap();
+    validate_cbor_tstr("nolz", cddl_input, "01").err_mismatch();
+    validate_cbor_tstr("nolz", cddl_input, "0a").err_mismatch();
+    validate_cbor_tstr("nolz", cddl_input, "").err_mismatch();
+
+    // Any string that starts with "A"
+    let cddl_input = r#" pat = tstr .regexp "^A" "#;
+    validate_cbor_tstr("pat", cddl_input, "A").unwrap();
+    validate_cbor_tstr("pat", cddl_input, "ABC").unwrap();
+    validate_cbor_tstr("pat", cddl_input, "AAA").unwrap();
+    validate_cbor_tstr("pat", cddl_input, "ZA").err_mismatch();
+    validate_cbor_tstr("pat", cddl_input, "").err_mismatch();
+
+    // A string with "BB" anywhere inside.
+    let cddl_input = r#" pat = tstr .regexp "BB" "#;
+    validate_cbor_tstr("pat", cddl_input, "BB").unwrap();
+    validate_cbor_tstr("pat", cddl_input, "ABCBBA").unwrap();
+    validate_cbor_tstr("pat", cddl_input, "ABCBA").err_mismatch();
+
+    // bad target node type (bstr)
+    let cddl_input = r#" pat = bstr .regexp "CCC" "#;
+    validate_cbor_tstr("pat", cddl_input, "CCC").err_structural();
+
+    // bad argument node type (integer)
+    let cddl_input = r#" pat = tstr .regexp 1234 "#;
+    validate_cbor_tstr("pat", cddl_input, "1234").err_structural();
+
+    // This is an example from RFC8610 2.2.2
+    let cddl_input = r#" nai = tstr .regexp "[A-Za-z0-9]+@[A-Za-z0-9]+(\\.[A-Za-z0-9]+)+" "#;
+    validate_cbor_tstr("nai", cddl_input, "N1@CH57HF.4Znqe0.dYJRN.igjf").unwrap();
 }
