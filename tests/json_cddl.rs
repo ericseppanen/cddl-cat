@@ -714,6 +714,46 @@ fn json_control_size() {
 }
 
 #[test]
+fn json_control_regexp() {
+    // Should match strings that look like integers with no leading zeroes.
+    let cddl_input = r#" nolz = tstr .regexp "^(0|[1-9][0-9]*)$" "#;
+    validate_json_str("nolz", cddl_input, r#" "0" "#).unwrap();
+    validate_json_str("nolz", cddl_input, r#" "1" "#).unwrap();
+    validate_json_str("nolz", cddl_input, r#" "20" "#).unwrap();
+    validate_json_str("nolz", cddl_input, r#" "23" "#).unwrap();
+    validate_json_str("nolz", cddl_input, r#" "123" "#).unwrap();
+    validate_json_str("nolz", cddl_input, r#" "01" "#).err_mismatch();
+    validate_json_str("nolz", cddl_input, r#" "0a" "#).err_mismatch();
+    validate_json_str("nolz", cddl_input, r#" "" "#).err_mismatch();
+
+    // Any string that starts with "A"
+    let cddl_input = r#" pat = tstr .regexp "^A" "#;
+    validate_json_str("pat", cddl_input, r#" "A" "#).unwrap();
+    validate_json_str("pat", cddl_input, r#" "ABC" "#).unwrap();
+    validate_json_str("pat", cddl_input, r#" "AAA" "#).unwrap();
+    validate_json_str("pat", cddl_input, r#" "ZA" "#).err_mismatch();
+    validate_json_str("pat", cddl_input, r#" "" "#).err_mismatch();
+
+    // A string with "BB" anywhere inside.
+    let cddl_input = r#" pat = tstr .regexp "BB" "#;
+    validate_json_str("pat", cddl_input, r#" "BB" "#).unwrap();
+    validate_json_str("pat", cddl_input, r#" "ABCBBA" "#).unwrap();
+    validate_json_str("pat", cddl_input, r#" "ABCBA" "#).err_mismatch();
+
+    // bad target node type (bstr)
+    let cddl_input = r#" pat = bstr .regexp "CCC" "#;
+    validate_json_str("pat", cddl_input, r#" "CCC" "#).err_structural();
+
+    // bad argument node type (integer)
+    let cddl_input = r#" pat = tstr .regexp 1234 "#;
+    validate_json_str("pat", cddl_input, r#" "1234" "#).err_structural();
+
+    // This is an example from RFC8610 2.2.2
+    let cddl_input = r#" nai = tstr .regexp "[A-Za-z0-9]+@[A-Za-z0-9]+(\\.[A-Za-z0-9]+)+" "#;
+    validate_json_str("nai", cddl_input, r#""N1@CH57HF.4Znqe0.dYJRN.igjf""#).unwrap();
+}
+
+#[test]
 fn json_infinite_recursion() {
     let cddl_input = r#"thing1 = thing2  thing2 = thing1"#;
     validate_json_str("thing1", cddl_input, "0").unwrap_err();
