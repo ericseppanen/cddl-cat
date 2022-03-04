@@ -92,11 +92,8 @@ fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
     }
 }
 
-// We only support the following control operators:
-//
-// <target> .size <integer literal>
-//
-//     The only allowed targets are bstr, tstr, and unsigned integers.
+// Control operators are functions that further restrict an underlying
+// type.
 //
 // TODO:
 // .bits
@@ -108,28 +105,34 @@ fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
 //
 fn flatten_control(ctl: &ast::TypeControl) -> FlattenResult<Node> {
     let ctl_result = match &ctl.op[..] {
-        "size" => {
-            let target = flatten_type2(&ctl.target)?;
-            let size = flatten_type2(&ctl.arg)?;
-
-            // The only allowed limit types are:
-            // A positive literal integer
-            // A named rule (which should resolve to a literal integer)
-            match size {
-                Node::Literal(Literal::Int(_)) => {}
-                Node::Rule(_) => {}
-                _ => return Err(ValidateError::Unsupported(".size limit type".into())),
-            };
-
-            Control::Size(CtlOpSize {
-                target: Box::new(target),
-                size: Box::new(size),
-            })
-        }
+        "size" => control_size(ctl)?,
         _ => return Err(ValidateError::Unsupported("control operator".into())),
     };
 
     Ok(Node::Control(ctl_result))
+}
+
+// Handle the "size" control operator:
+// <target> .size <integer literal>
+// The only allowed targets are bstr, tstr, and unsigned integers.
+//
+fn control_size(ctl: &ast::TypeControl) -> FlattenResult<Control> {
+    let target = flatten_type2(&ctl.target)?;
+    let size = flatten_type2(&ctl.arg)?;
+
+    // The only allowed limit types are:
+    // A positive literal integer
+    // A named rule (which should resolve to a literal integer)
+    match size {
+        Node::Literal(Literal::Int(_)) => {}
+        Node::Rule(_) => {}
+        _ => return Err(ValidateError::Unsupported(".size limit type".into())),
+    };
+
+    Ok(Control::Size(CtlOpSize {
+        target: Box::new(target),
+        size: Box::new(size),
+    }))
 }
 
 // The only way a range start or end can be specified is with a literal
