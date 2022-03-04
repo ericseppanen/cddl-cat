@@ -102,14 +102,14 @@
 //! - Turn a group into a choice (`&`)
 //! - Map keys with cut syntax (`^ =>`)
 //! - Generic types
-//! - Control operator `.size`
+//! - Control operators `.size` and `.regexp`
 //!
 //! Unimplemented CDDL features:
 //! - Extend type with `/=`
 //! - Extend group with `//=`
 //! - Type sockets with `$`
 //! - Group sockets with `$$`
-//! - Control operators other than `.size` (e.g. `.bits`, `.regexp` ...)
+//! - Control operators other than those above (e.g. `.bits`, `lt`, `gt`...)
 //! - Group enumeration with `&`
 //! - Tagged data with `#`
 //! - Hexfloat literals (e.g. `0x1.921fb5p+1`)
