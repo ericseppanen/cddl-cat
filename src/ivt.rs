@@ -376,6 +376,8 @@ impl fmt::Display for Range {
 pub enum Control {
     /// Limit the size in bytes.
     Size(CtlOpSize),
+    /// Apply a regular expression to a text string.
+    Regexp(CtlOpRegexp),
 }
 
 /// Control Operator `.size`
@@ -394,6 +396,24 @@ pub struct CtlOpSize {
     pub target: Box<Node>,
     /// The size limit, in bytes.
     pub size: Box<Node>,
+}
+
+/// Control Operator `.regexp`
+///
+/// `.regexp` is defined in RFC 8610 3.8.3.
+///
+#[derive(Debug, Clone)]
+pub struct CtlOpRegexp {
+    /// The regular expression, in compiled form.
+    pub(crate) re: regex::Regex,
+}
+
+impl PartialEq for CtlOpRegexp {
+    fn eq(&self, other: &Self) -> bool {
+        // We only need to compare the string form,
+        // not the compiled form.
+        self.re.as_str() == other.re.as_str()
+    }
 }
 
 /// Any node in the Intermediate Validation Tree.

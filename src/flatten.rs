@@ -7,6 +7,8 @@
 //! [`ivt`]: crate::ivt
 //! [`ast`]: crate::ast
 
+use regex::RegexBuilder;
+
 use crate::ast;
 use crate::ivt::*;
 use crate::parser::{parse_cddl, slice_parse_cddl};
@@ -106,6 +108,7 @@ fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
 fn flatten_control(ctl: &ast::TypeControl) -> FlattenResult<Node> {
     let ctl_result = match &ctl.op[..] {
         "size" => control_size(ctl)?,
+        "regexp" => control_regex(ctl)?,
         _ => return Err(ValidateError::Unsupported("control operator".into())),
     };
 
@@ -133,6 +136,40 @@ fn control_size(ctl: &ast::TypeControl) -> FlattenResult<Control> {
         target: Box::new(target),
         size: Box::new(size),
     }))
+}
+
+// Handle the "size" control operator:
+// <target> .size <integer literal>
+// The only allowed targets are bstr, tstr, and unsigned integers.
+//
+fn control_regex(ctl: &ast::TypeControl) -> FlattenResult<Control> {
+    let target = flatten_type2(&ctl.target)?;
+    let regexp_node = flatten_type2(&ctl.arg)?;
+
+    // The target type must be a text string.
+    match target {
+        Node::PreludeType(PreludeType::Tstr) => {}
+        _ => {
+            return Err(ValidateError::Structural("bad regexp target type".into()));
+        }
+    }
+
+    // The regular expression itself should be a literal string.
+    match regexp_node {
+        Node::Literal(Literal::Text(re_str)) => {
+            // Compile the regex.
+            // Limit the size of the result, so that untrusted input can't
+            // use a lot of memory. The regex crate says this will adequately
+            // protect against using too much CPU time as well.
+            let re = RegexBuilder::new(&re_str)
+                .size_limit(1 << 20)
+                .build()
+                .map_err(|_| ValidateError::Structural("malformed regexp".into()))?;
+
+            Ok(Control::Regexp(CtlOpRegexp { re }))
+        }
+        _ => Err(ValidateError::Structural("improper regexp type".into())),
+    }
 }
 
 // The only way a range start or end can be specified is with a literal

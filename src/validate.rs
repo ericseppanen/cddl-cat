@@ -1045,6 +1045,7 @@ where
 fn validate_control(ctl: &Control, value: &Value, ctx: &Context) -> ValidateResult {
     match ctl {
         Control::Size(ctl_size) => validate_control_size(ctl_size, value, ctx),
+        Control::Regexp(re) => validate_control_regexp(re, value),
     }
 }
 
@@ -1083,6 +1084,23 @@ fn validate_control_size(ctl: &CtlOpSize, value: &Value, ctx: &Context) -> Valid
             }
         }
     })
+}
+
+/// Validate the control operator "regexp"
+///
+/// `regexp` applies a regular expression to a text string.
+///
+fn validate_control_regexp(re: &CtlOpRegexp, value: &Value) -> ValidateResult {
+    match value {
+        Value::Text(text) => {
+            if re.re.is_match(text) {
+                Ok(())
+            } else {
+                Err(mismatch("regex mismatch"))
+            }
+        }
+        _ => Err(mismatch("tstr")),
+    }
 }
 
 fn validate_size_uint(size: u64, value: &Value) -> ValidateResult {
