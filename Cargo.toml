@@ -26,7 +26,7 @@ strum_macros = "0.23.1"
 escape8259 = "0.5"
 base64 = "0.13"
 thiserror = "1.0"
-regex = "1.5.4"
+regex = "1.5.5"
 
 [dev-dependencies]
 serde = { version = "1.0", features = ["derive"] }
