@@ -417,18 +417,14 @@ where
     E: nom::error::ParseError<&'a str>,
     F: FnMut(&'a str) -> nom::IResult<&'a str, O, E>,
 {
-    move |input: &'a str| {
-        #[allow(clippy::clone_double_ref)]
-        let i = input.clone();
-        match parser(i) {
-            Ok((i, output)) => {
-                let index = offset(input, i);
-                let output_slice = &input[..index];
-                let output_tuple = (output_slice, output);
-                Ok((i, output_tuple))
-            }
-            Err(e) => Err(e),
+    move |input: &'a str| match parser(input) {
+        Ok((i, output)) => {
+            let index = offset(input, i);
+            let output_slice = &input[..index];
+            let output_tuple = (output_slice, output);
+            Ok((i, output_tuple))
         }
+        Err(e) => Err(e),
     }
 }
 
