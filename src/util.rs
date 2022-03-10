@@ -45,11 +45,7 @@ impl ValidateError {
     /// A "fatal" error is one that should fail the entire validation, even if
     /// it occurs inside a choice or occurrence that might otherwise succeed.
     pub(crate) fn is_fatal(&self) -> bool {
-        match self {
-            ValidateError::Mismatch(_) => false,
-            ValidateError::MapCut(_) => false,
-            _ => true,
-        }
+        !matches!(self, ValidateError::Mismatch(_) | ValidateError::MapCut(_))
     }
 
     /// Convert a MapCut error to a Mismatch error; otherwise return the original error.
@@ -61,10 +57,7 @@ impl ValidateError {
     }
 
     pub(crate) fn is_mismatch(&self) -> bool {
-        match self {
-            ValidateError::Mismatch(_) => true,
-            _ => false,
-        }
+        matches!(self, ValidateError::Mismatch(_))
     }
 }
 
@@ -138,5 +131,19 @@ impl ErrorMatch for ValidateResult {
             Err(ValidateError::Structural(_)) => (),
             _ => panic!("expected Structural, got {:?}", self),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_extras() {
+        let e: ValidateError = mismatch("");
+        assert!(!e.is_fatal());
+
+        let e = ValidateError::Structural("".into());
+        assert!(e.is_fatal());
     }
 }
