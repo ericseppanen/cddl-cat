@@ -104,7 +104,7 @@ Unimplemented CDDL features:
 - Extend group with `//=`
 - Type sockets with `$`
 - Group sockets with `$$`
-- Control operators other than those above (e.g. `.bits`, `lt`, `gt`...)
+- Control operators other than those above (e.g. `.bits`, `.lt`, `.gt`...)
 - Group enumeration with `&`
 - Tagged data with `#`
 - Hexfloat literals (e.g. `0x1.921fb5p+1`)
