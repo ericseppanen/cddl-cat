@@ -51,14 +51,7 @@ pub mod tests {
     use super::*;
 
     /// A `LookupContext` that fails all rule lookups
-    pub struct DummyContext {}
-
-    impl DummyContext {
-        #![allow(clippy::new_without_default)]
-        pub fn new() -> DummyContext {
-            DummyContext {}
-        }
-    }
+    pub struct DummyContext;
 
     impl LookupContext for DummyContext {
         fn lookup_rule<'a>(&'a self, name: &str) -> LookupResult<'a> {

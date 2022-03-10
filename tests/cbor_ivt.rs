@@ -26,7 +26,7 @@ impl TestValidate for Value {
     // Create a validation context and perform validation
     fn test_validate(&self, node: &Node) -> ValidateResult {
         // We don't need to do any Rule lookups, so an empty Context will do.
-        let ctx = DummyContext::new();
+        let ctx = DummyContext;
         let rule_def = RuleDef {
             node: node.clone(),
             generic_parms: Vec::new(),
