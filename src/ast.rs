@@ -61,7 +61,7 @@ pub struct Member {
 
 /// An "occurrence" which specifies how many elements can match a group member.
 #[allow(missing_docs)]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Occur {
     Optional,
     ZeroOrMore,

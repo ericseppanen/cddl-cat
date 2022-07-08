@@ -8,7 +8,7 @@ use thiserror::Error;
 /// A basic error type that contains a string.
 #[allow(missing_docs)]
 #[non_exhaustive]
-#[derive(Debug, PartialEq, Error)]
+#[derive(Debug, PartialEq, Eq, Error)]
 pub enum ValidateError {
     /// An error during CDDL parsing.
     #[error(transparent)]
@@ -65,7 +65,7 @@ impl ValidateError {
 ///
 /// If the CDDL specified an `int` and the data contained a string, this is
 /// the error that would result.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Mismatch {
     expected: String,
 }

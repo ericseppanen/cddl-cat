@@ -86,7 +86,7 @@ fn flatten_type(ty: &ast::Type) -> FlattenResult<Node> {
 }
 
 fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
-    use ast::Type1::*;
+    use ast::Type1::{Control, Range, Simple};
     match ty1 {
         Simple(ty2) => flatten_type2(ty2),
         Range(r) => flatten_range(r),
@@ -106,7 +106,7 @@ fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
 // According to RFC 8610 3.8, new control operators may arrive later.
 //
 fn flatten_control(ctl: &ast::TypeControl) -> FlattenResult<Node> {
-    let ctl_result = match &ctl.op[..] {
+    let ctl_result = match ctl.op.as_str() {
         "size" => control_size(ctl)?,
         "regexp" => control_regex(ctl)?,
         _ => return Err(ValidateError::Unsupported("control operator".into())),

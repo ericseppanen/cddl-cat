@@ -186,7 +186,7 @@ fn validate_cbor_ranges() {
 #[test]
 fn validate_cbor_textstring() {
     // "tstr" and "text" mean the same thing.
-    for cddl_input in [r#"thing = tstr"#, r#"thing = text"#].iter() {
+    for cddl_input in &[r#"thing = tstr"#, r#"thing = text"#] {
         validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).unwrap();
         validate_cbor_bytes("thing", cddl_input, cbor::TEXT_IETF).unwrap();
         validate_cbor_bytes("thing", cddl_input, cbor::TEXT_CJK).unwrap();
@@ -198,7 +198,7 @@ fn validate_cbor_textstring() {
 #[test]
 fn validate_cbor_bytestring() {
     // "bstr" and "bytes" mean the same thing.
-    for cddl_input in [r#"thing = bstr"#, r#"thing = bytes"#].iter() {
+    for cddl_input in &[r#"thing = bstr"#, r#"thing = bytes"#] {
         validate_cbor_bytes("thing", cddl_input, cbor::BYTES_EMPTY).unwrap();
         validate_cbor_bytes("thing", cddl_input, cbor::BYTES_1234).unwrap();
         validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).unwrap_err();

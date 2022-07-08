@@ -85,7 +85,7 @@ fn validate_json_integer() {
 #[test]
 fn validate_json_textstring() {
     // "tstr" and "text" mean the same thing.
-    for cddl_input in [r#"thing = tstr"#, r#"thing = text"#].iter() {
+    for cddl_input in &[r#"thing = tstr"#, r#"thing = text"#] {
         validate_json_str("thing", cddl_input, r#""""#).unwrap();
         validate_json_str("thing", cddl_input, r#""JSON""#).unwrap();
         validate_json_str("thing", cddl_input, r#""水""#).unwrap();

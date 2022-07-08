@@ -41,7 +41,7 @@ type JResult<'a, I, O> = nom::IResult<I, O, CowParseError<'a>>;
 
 /// The "kind" of error generated during CDDL parsing.
 #[non_exhaustive]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ErrorKind {
     /// An integer didn't parse correctly.
     MalformedInteger,
@@ -59,7 +59,7 @@ pub enum ErrorKind {
 use ErrorKind::*;
 
 /// An error that occurred during CDDL parsing.
-#[derive(Debug, PartialEq, Error)]
+#[derive(Debug, PartialEq, Eq, Error)]
 // thiserror will generate a Display implementation.
 #[error("{kind:?}({ctx})")]
 pub struct ParseError {

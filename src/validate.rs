@@ -419,7 +419,7 @@ fn map_search<'a>(
     working_map: &'a mut WorkingMap,
     ctx: &Context,
 ) -> TempResult<(Value, &'a Value)> {
-    for (key, value) in working_map.map.iter() {
+    for (key, value) in &working_map.map {
         let attempt = validate(key, node, ctx);
         if attempt.is_ok() {
             return Ok((key.clone(), value));

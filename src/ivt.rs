@@ -45,7 +45,7 @@ pub type RulesWithStrings = BTreeMap<String, (RuleDef, String)>;
 /// There are more that aren't supported by this crate yet.
 ///
 /// [RFC8610 appendix D]: https://tools.ietf.org/html/rfc8610#appendix-D
-#[derive(Debug, Copy, Clone, PartialEq, Display)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Display)]
 #[allow(missing_docs)]
 pub enum PreludeType {
     /// Any type or embedded data structure
