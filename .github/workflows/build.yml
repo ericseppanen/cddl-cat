@@ -26,6 +26,10 @@ jobs:
           toolchain: ${{ matrix.rust_toolchain }}
           override: true
 
+      - name: enable Cargo.lock
+        if: ${{ matrix.rust_toolchain == '1.48.0' }}
+        run: cp .Cargo.lock.msrv Cargo.lock
+
       - name: cargo build
         uses: actions-rs/cargo@v1
         with:
