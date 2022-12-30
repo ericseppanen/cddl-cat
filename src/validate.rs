@@ -806,7 +806,7 @@ fn validate_map_choiceify_members(
                 // throws away the keys on its immediate operand.
                 // validate against the value (which is presumably
                 // a group containing KeyValues)
-                validate_map_member(&*kv.value, working_map, ctx)
+                validate_map_member(&kv.value, working_map, ctx)
             }
             Node::Rule(rule) => {
                 // A group may include another group by name.
@@ -1161,7 +1161,7 @@ fn validate_choiceify_members(choices: &[Node], value: &Value, ctx: &Context) ->
     // also allowed; we will transparently unwrap those (recursively).
     for item in choices {
         let validate_result = match item {
-            Node::KeyValue(kv) => validate(value, &*kv.value, ctx),
+            Node::KeyValue(kv) => validate(value, &kv.value, ctx),
             Node::Rule(rule) => {
                 // A group may include another group by name. Handling this:
                 // Dereference the rule. If it leads to a Group, then
