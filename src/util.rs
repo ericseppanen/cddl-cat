@@ -18,7 +18,7 @@ pub enum ValidateError {
     Structural(String),
     /// A data mismatch during validation.
     // The difference between Mismatch and MapCut is that they trigger
-    // slightly different internal behaivor; to a human reader they mean
+    // slightly different internal behavior; to a human reader they mean
     // the same thing so we will Display them the same way.
     #[error("Mismatch(expected {})", .0.expected)]
     Mismatch(Mismatch),
