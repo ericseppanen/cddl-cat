@@ -8,7 +8,7 @@ use thiserror::Error;
 /// A basic error type that contains a string.
 #[allow(missing_docs)]
 #[non_exhaustive]
-#[derive(Debug, PartialEq, Eq, Error)]
+#[derive(Debug, Error)]
 pub enum ValidateError {
     /// An error during CDDL parsing.
     #[error(transparent)]

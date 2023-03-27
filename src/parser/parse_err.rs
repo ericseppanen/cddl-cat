@@ -24,7 +24,7 @@ pub enum ErrorKind {
 }
 
 /// An error that occurred during CDDL parsing.
-#[derive(Debug, PartialEq, Eq, Error)]
+#[derive(Debug, Error)]
 // thiserror will generate a Display implementation.
 #[error("{kind:?}({ctx})")]
 pub struct ParseError {
