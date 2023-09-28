@@ -38,6 +38,7 @@ pub mod cbor {
     pub const BYTES_EMPTY:  &[u8] = b"\x40";
     pub const BYTES_1234:   &[u8] = b"\x44\x01\x02\x03\x04"; // hex 01020304
 
+    pub const CBOR_INT_23:  &[u8] = b"\x41\x17"; // cbor(23)
 }
 
 #[test]
@@ -690,6 +691,24 @@ fn cbor_control_size() {
 
     let cddl_input = r#"thing = bstr .size -1"#;
     validate_cbor_bytes("thing", cddl_input, cbor::BYTES_EMPTY).unwrap_err();
+}
+
+#[test]
+fn cbor_control_cbor() {
+    let cddl_input = r#"thing = bytes .cbor uint"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::CBOR_INT_23).unwrap();
+
+    let cddl_input = r#"
+        thing = bytes .cbor foo
+        foo = uint
+    "#;
+    validate_cbor_bytes("thing", cddl_input, cbor::CBOR_INT_23).unwrap();
+
+    let cddl_input = r#"
+        thing = bytes .cbor foo<uint>
+        foo<t> = t
+    "#;
+    validate_cbor_bytes("thing", cddl_input, cbor::CBOR_INT_23).unwrap();
 }
 
 #[track_caller]
