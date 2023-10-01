@@ -109,6 +109,7 @@ fn flatten_control(ctl: &ast::TypeControl) -> FlattenResult<Node> {
     let ctl_result = match ctl.op.as_str() {
         "size" => control_size(ctl)?,
         "regexp" => control_regex(ctl)?,
+        "cbor" => control_cbor(ctl)?,
         _ => return Err(ValidateError::Unsupported("control operator".into())),
     };
 
@@ -170,6 +171,25 @@ fn control_regex(ctl: &ast::TypeControl) -> FlattenResult<Control> {
         }
         _ => Err(ValidateError::Structural("improper regexp type".into())),
     }
+}
+
+// Handle the "cbor" control operator:
+// <target> .cbor <rule>
+// The only allowed targets are bstr.
+//
+fn control_cbor(ctl: &ast::TypeControl) -> FlattenResult<Control> {
+    let target = flatten_type2(&ctl.target)?;
+    let node = Box::new(flatten_type2(&ctl.arg)?);
+
+    // The target type must be a byte string.
+    match target {
+        Node::PreludeType(PreludeType::Bstr) => {}
+        _ => {
+            return Err(ValidateError::Structural("bad .cbor target type".into()));
+        }
+    }
+
+    Ok(Control::Cbor(CtlOpCbor { node }))
 }
 
 // The only way a range start or end can be specified is with a literal

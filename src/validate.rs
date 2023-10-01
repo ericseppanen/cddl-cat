@@ -1046,6 +1046,32 @@ fn validate_control(ctl: &Control, value: &Value, ctx: &Context) -> ValidateResu
     match ctl {
         Control::Size(ctl_size) => validate_control_size(ctl_size, value, ctx),
         Control::Regexp(re) => validate_control_regexp(re, value),
+        Control::Cbor(ctl_cbor) => validate_control_cbor(ctl_cbor, value, ctx),
+    }
+}
+
+#[cfg(not(feature = "serde_cbor"))]
+fn validate_control_cbor(_ctl_cbor: &CtlOpCbor, _value: &Value, _ctx: &Context) -> ValidateResult {
+    Err(ValidateError::Unsupported(
+        "'.cbor' control operator; enable serde_cbor feature to support.".into(),
+    ))
+}
+
+#[cfg(feature = "serde_cbor")]
+fn validate_control_cbor(ctl_cbor: &CtlOpCbor, value: &Value, ctx: &Context) -> ValidateResult {
+    use serde_cbor::Value as CBOR_Value;
+    use std::convert::TryFrom;
+
+    match value {
+        Value::Bytes(bytes) => {
+            let cbor_value: CBOR_Value = serde_cbor::from_slice(bytes)
+                .map_err(|e| ValidateError::ValueError(format!("{}", e)))?;
+
+            let nested_value = Value::try_from(cbor_value)?;
+
+            validate(&nested_value, ctl_cbor.node.as_ref(), ctx)
+        }
+        _ => Err::<(), ValidateError>(mismatch("Bytes")),
     }
 }
 

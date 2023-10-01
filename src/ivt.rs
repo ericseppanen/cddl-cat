@@ -378,6 +378,8 @@ pub enum Control {
     Size(CtlOpSize),
     /// Apply a regular expression to a text string.
     Regexp(CtlOpRegexp),
+    /// Validate a nested CBOR bytestring
+    Cbor(CtlOpCbor),
 }
 
 /// Control Operator `.size`
@@ -414,6 +416,19 @@ impl PartialEq for CtlOpRegexp {
         // not the compiled form.
         self.re.as_str() == other.re.as_str()
     }
+}
+
+/// Control Operator `.cbor`
+///
+/// `.cbor` is defined in RFC 8610 3.8.4
+///
+/// A ".cbor" control on a byte string indicates that the byte string
+/// carries a CBOR-encoded data item.  Decoded, the data item matches the
+/// type given as the right-hand-side argument.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CtlOpCbor {
+    /// The nested node to satisfy
+    pub(crate) node: Box<Node>,
 }
 
 /// Any node in the Intermediate Validation Tree.
