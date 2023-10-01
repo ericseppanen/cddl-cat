@@ -97,7 +97,7 @@ Supported CDDL features:
 - Turn a group into a choice (`&`)
 - Map keys with cut syntax (`^ =>`)
 - Generic types
-- Control operators `.cbor`, `.size` and `.regexp`
+- Control operators `.cbor`, `.size`, and `.regexp`
 
 Unimplemented CDDL features:
 - Extend type with `/=`
