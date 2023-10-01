@@ -33,5 +33,4 @@ serde = { version = "1.0.97", features = ["derive"] }
 ntest = "0.7.1"
 
 [package.metadata.release]
-dev-version = false
 pre-release-commit-message = "release {{version}}"
