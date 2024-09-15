@@ -85,7 +85,8 @@
 //! ```
 //! Supported prelude types:
 //! - `any`, `uint`, `nint`, `int`, `bstr`, `bytes`, `tstr`, `text`
-//! - `float`, `float16`, `float32`, `float64`, `float16-32`, `float32-64` \
+//! - `float`, `float16`, `float32`, `float64`, `float16-32`, `float32-64`
+//!
 //! Note: float sizes are not validated.
 //!
 //! Supported CDDL features:

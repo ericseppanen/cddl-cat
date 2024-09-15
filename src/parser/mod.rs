@@ -743,7 +743,7 @@ fn occur_star(input: &str) -> JResult<&str, Occur> {
             };
             let upper: usize = match tup.2 {
                 Some(n) => try_into_int(n, input)?,
-                None => std::usize::MAX,
+                None => usize::MAX,
             };
             Ok(Occur::Numbered(lower, upper))
         }
@@ -1480,7 +1480,7 @@ mod tests {
         assert!(is_unescaped_schar('A'));
         assert!(is_unescaped_schar('の'));
         assert!(is_unescaped_schar(std::char::from_u32(0x10FF0).unwrap()));
-        assert!(!is_unescaped_schar(0x7F as char));
+        assert!(!is_unescaped_schar(0x7Fu8 as char));
 
         assert_eq!(unescaped_schar("Aの"), Ok(("", "Aの")));
 
@@ -1562,7 +1562,7 @@ mod tests {
         assert_eq!(occur("+"), Ok(("", Occur::OneOrMore)));
         assert_eq!(occur("*"), Ok(("", Occur::ZeroOrMore)));
         assert_eq!(occur("*9"), Ok(("", Occur::Numbered(0, 9))));
-        assert_eq!(occur("7*"), Ok(("", Occur::Numbered(7, std::usize::MAX))));
+        assert_eq!(occur("7*"), Ok(("", Occur::Numbered(7, usize::MAX))));
         assert_eq!(occur("7*9"), Ok(("", Occur::Numbered(7, 9))));
         assert_eq!(occur("0b100*0x10"), Ok(("", Occur::Numbered(4, 16))));
     }

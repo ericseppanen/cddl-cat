@@ -54,8 +54,6 @@
 //! validate_cbor(&rule_def, &cbor_value, &ctx).unwrap();
 //! ```
 
-#![cfg(feature = "serde_cbor")]
-
 use crate::context::{BasicContext, LookupContext};
 use crate::flatten::flatten_from_str;
 use crate::ivt::RuleDef;

@@ -65,7 +65,7 @@ fn validate_literal_text() {
 
 #[test]
 fn validate_choice() {
-    let options = vec![1, 2, 3];
+    let options = [1, 2, 3];
     let options = options.iter().map(|n| literal_int(*n)).collect();
     let node = &Node::Choice(Choice { options });
 

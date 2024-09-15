@@ -12,8 +12,6 @@
 //! ```
 //!
 
-#![cfg(feature = "serde_json")]
-
 use crate::context::{BasicContext, LookupContext};
 use crate::flatten::flatten_from_str;
 use crate::ivt::RuleDef;
