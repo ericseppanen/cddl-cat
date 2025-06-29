@@ -231,7 +231,7 @@ impl fmt::Debug for KeyValue {
 /// ```
 ///
 /// [RFC8610]: https://tools.ietf.org/html/rfc8610
-
+///
 // Re-use the Occur limit type that the parser uses
 pub type OccurLimit = ast::Occur;
 

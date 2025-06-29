@@ -308,11 +308,12 @@ impl WorkingArray {
     }
 }
 
-// Prevent warnings if both serde_cbor and serde_json are disabled.
-#[allow(dead_code)]
-
 // This is the main validation dispatch function.
 // It tries to match a Node and a Value, recursing as needed.
+#[allow(
+    dead_code,
+    reason = "Prevent warnings if both serde_cbor and serde_json are disabled"
+)]
 fn validate(value: &Value, node: &Node, ctx: &Context) -> ValidateResult {
     match node {
         Node::Literal(l) => validate_literal(l, value),

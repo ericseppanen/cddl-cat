@@ -17,7 +17,7 @@ type LookupResult<'a> = Result<&'a RuleDef, ValidateError>;
 /// a name reference to an [`ivt::Rule`].
 ///
 /// [`ivt::Rule`]: crate::ivt::Rule
-
+///
 pub trait LookupContext {
     /// Lookup a rule by name.
     fn lookup_rule<'a>(&'a self, name: &str) -> LookupResult<'a>;
