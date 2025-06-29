@@ -137,6 +137,7 @@ impl<'a> Context<'a> {
     }
 }
 
+#[allow(dead_code, reason = "Prevent warnings if all features are disabled")]
 pub(crate) fn do_validate(
     value: &Value,
     rule_def: &RuleDef,
