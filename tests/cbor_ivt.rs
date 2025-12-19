@@ -1,11 +1,12 @@
-#![cfg(feature = "serde_cbor")]
+#![cfg(feature = "ciborium")]
 
 use cddl_cat::cbor::validate_cbor;
 use cddl_cat::context::{tests::DummyContext, BasicContext};
 use cddl_cat::ivt::*;
 use cddl_cat::util::ValidateResult;
+use ciborium::value::Integer;
+use ciborium::Value;
 use serde::ser::Serialize;
-use serde_cbor::Value;
 use std::collections::HashMap;
 
 // Some Node structs to test with
@@ -14,8 +15,11 @@ static PRELUDE_TSTR: &Node = &Node::PreludeType(PreludeType::Tstr);
 static LITERAL_7: &Node = &Node::Literal(Literal::Int(7));
 
 // Create a Value instance from anything that's serializable
-fn gen_value<T: Serialize>(t: T) -> Value {
-    serde_cbor::value::to_value(t).unwrap()
+fn gen_value<T: Serialize>(value: T) -> Value {
+    // hack: serialize to a Vec and then deserialize to a Value
+    let mut serialized = Vec::new();
+    ciborium::into_writer(&value, &mut serialized).unwrap();
+    ciborium::from_reader(serialized.as_slice()).unwrap()
 }
 
 trait TestValidate {
@@ -60,7 +64,9 @@ fn validate_literal_int() {
 fn validate_literal_text() {
     let node = &literal_text("abc");
     Value::Text("abc".to_string()).test_validate(node).unwrap();
-    Value::Integer(8).test_validate(node).unwrap_err();
+    Value::Integer(Integer::from(8))
+        .test_validate(node)
+        .unwrap_err();
 }
 
 #[test]
@@ -109,7 +115,7 @@ fn validate_map() {
         Value::Map(m) => {
             let key = gen_value("Bob");
             let value = gen_value("forty three");
-            m.insert(key, value);
+            m.push((key, value));
         }
         _ => unreachable!(),
     }
@@ -121,7 +127,9 @@ fn validate_map() {
     gen_value(value).test_validate(node).unwrap_err();
 
     // Attempt to match against a different (non-Map) Value type
-    Value::Integer(1).test_validate(node).unwrap_err();
+    Value::Integer(Integer::from(1))
+        .test_validate(node)
+        .unwrap_err();
 }
 
 #[test]

@@ -1,4 +1,4 @@
-//! This module implements validation from [`serde_cbor::Value`].
+//! This module implements validation from [`ciborium::Value`].
 //!
 //! # Examples
 //!
@@ -16,7 +16,8 @@
 //!     name: "Bob".to_string(),
 //!     age: 43,
 //! };
-//! let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+//! let mut cbor_bytes = Vec::new();
+//! ciborium::into_writer(&input, &mut cbor_bytes).unwrap();
 //! let cddl_input = "person = {name: tstr, age: int}";
 //!
 //! validate_cbor_bytes("person", cddl_input, &cbor_bytes).unwrap();
@@ -39,7 +40,8 @@
 //! #     name: "Bob".to_string(),
 //! #     age: 43,
 //! # };
-//! # let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+//! # let mut cbor_bytes = Vec::new();
+//! # ciborium::into_writer(&input, &mut cbor_bytes).unwrap();
 //! # let cddl_input = "person = {name: tstr, age: int}";
 //!
 //! // Parse the CDDL text and flatten it into IVT form.
@@ -49,7 +51,7 @@
 //! // Look up the Rule we want to validate.
 //! let rule_def = &ctx.rules.get("person").unwrap();
 //! // Deserialize the CBOR bytes
-//! let cbor_value = serde_cbor::from_slice(&cbor_bytes).unwrap();
+//! let cbor_value = ciborium::from_reader(cbor_bytes.as_slice()).unwrap();
 //! // Perform the validation.
 //! validate_cbor(&rule_def, &cbor_value, &ctx).unwrap();
 //! ```
@@ -60,7 +62,7 @@ use crate::ivt::RuleDef;
 use crate::util::{ValidateError, ValidateResult};
 use crate::validate::do_validate;
 use crate::value::Value;
-use serde_cbor::Value as CBOR_Value;
+use ciborium::Value as CBOR_Value;
 use std::collections::BTreeMap;
 use std::convert::TryFrom;
 
@@ -75,7 +77,7 @@ impl TryFrom<&CBOR_Value> for Value {
         let result = match value {
             CBOR_Value::Null => Value::Null,
             CBOR_Value::Bool(b) => Value::Bool(*b),
-            CBOR_Value::Integer(i) => Value::Integer(*i),
+            CBOR_Value::Integer(i) => Value::Integer((*i).into()),
             CBOR_Value::Float(f) => Value::from_float(*f),
             CBOR_Value::Bytes(b) => Value::Bytes(b.clone()),
             CBOR_Value::Text(t) => Value::Text(t.clone()),
@@ -140,7 +142,7 @@ pub fn validate_cbor_bytes(name: &str, cddl: &str, cbor: &[u8]) -> ValidateResul
 
     // Deserialize the CBOR bytes
     let cbor_value: CBOR_Value =
-        serde_cbor::from_slice(cbor).map_err(|e| ValidateError::ValueError(format!("{}", e)))?;
+        ciborium::from_reader(cbor).map_err(|e| ValidateError::ValueError(format!("{}", e)))?;
 
     // Convert the CBOR tree into a Value tree for validation
     let value = Value::try_from(cbor_value)?;

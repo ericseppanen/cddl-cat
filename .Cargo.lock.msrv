@@ -27,7 +27,7 @@ dependencies = [
  "ntest",
  "regex",
  "serde",
- "serde_cbor",
+ "ciborium",
  "serde_json",
  "strum_macros",
  "thiserror",
@@ -212,7 +212,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_cbor"
+name = "ciborium"
 version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"

@@ -313,7 +313,7 @@ impl WorkingArray {
 // It tries to match a Node and a Value, recursing as needed.
 #[allow(
     dead_code,
-    reason = "Prevent warnings if both serde_cbor and serde_json are disabled"
+    reason = "Prevent warnings if both ciborium and serde_json are disabled"
 )]
 fn validate(value: &Value, node: &Node, ctx: &Context) -> ValidateResult {
     match node {
@@ -1052,21 +1052,21 @@ fn validate_control(ctl: &Control, value: &Value, ctx: &Context) -> ValidateResu
     }
 }
 
-#[cfg(not(feature = "serde_cbor"))]
+#[cfg(not(feature = "ciborium"))]
 fn validate_control_cbor(_ctl_cbor: &CtlOpCbor, _value: &Value, _ctx: &Context) -> ValidateResult {
     Err(ValidateError::Unsupported(
-        "'.cbor' control operator; enable serde_cbor feature to support.".into(),
+        "'.cbor' control operator; enable ciborium feature to support.".into(),
     ))
 }
 
-#[cfg(feature = "serde_cbor")]
+#[cfg(feature = "ciborium")]
 fn validate_control_cbor(ctl_cbor: &CtlOpCbor, value: &Value, ctx: &Context) -> ValidateResult {
-    use serde_cbor::Value as CBOR_Value;
+    use ciborium::Value as CBOR_Value;
     use std::convert::TryFrom;
 
     match value {
         Value::Bytes(bytes) => {
-            let cbor_value: CBOR_Value = serde_cbor::from_slice(bytes)
+            let cbor_value: CBOR_Value = ciborium::from_reader(bytes.as_slice())
                 .map_err(|e| ValidateError::ValueError(format!("{}", e)))?;
 
             let nested_value = Value::try_from(cbor_value)?;

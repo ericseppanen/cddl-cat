@@ -14,7 +14,7 @@ against a CDDL schema description.
 
 # Implementation Details
 
-- Supports CBOR and JSON encodings, controlled by the `serde_cbor` and
+- Supports CBOR and JSON encodings, controlled by the `ciborium` and
   `serde_json` features.
 
 - An "Intermediate Validation Tree" ([`ivt`](https://docs.rs/cddl-cat/latest/cddl-cat/ivt/)) is constructed
@@ -74,7 +74,7 @@ let input = PersonStruct {
     name: "Bob".to_string(),
     age: 43,
 };
-let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+let cbor_bytes = ciborium::to_vec(&input).unwrap();
 let cddl_input = "person = {name: tstr, age: int}";
 validate_cbor_bytes("person", cddl_input, &cbor_bytes).unwrap();
 ```

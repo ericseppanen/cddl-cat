@@ -12,7 +12,7 @@
 //!
 //! # Implementation Details
 //!
-//! - Supports CBOR and JSON encodings, controlled by the `serde_cbor` and
+//! - Supports CBOR and JSON encodings, controlled by the `ciborium` and
 //!   `serde_json` features.
 //!
 //! - An "Intermediate Validation Tree" ([`ivt`]) is constructed
@@ -63,7 +63,7 @@
 //!
 //! A similar example, verifying CBOR-encoded data against a CDDL schema:
 //! ```
-//! # #[cfg(feature = "serde_cbor")]
+//! # #[cfg(feature = "ciborium")]
 //! use cddl_cat::validate_cbor_bytes;
 //! use serde::Serialize;
 //!
@@ -77,10 +77,11 @@
 //!     name: "Bob".to_string(),
 //!     age: 43,
 //! };
-//! # #[cfg(feature = "serde_cbor")]
-//! let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+//! # #[cfg(feature = "ciborium")]
+//! let mut cbor_bytes = Vec::new();
+//! ciborium::into_writer(&input, &mut cbor_bytes).unwrap();
 //! let cddl_input = "person = {name: tstr, age: int}";
-//! # #[cfg(feature = "serde_cbor")]
+//! # #[cfg(feature = "ciborium")]
 //! validate_cbor_bytes("person", cddl_input, &cbor_bytes).unwrap();
 //! ```
 //! Supported prelude types:
@@ -134,9 +135,9 @@ pub use util::{ValidateError, ValidateResult};
 pub(crate) mod validate;
 pub mod value;
 
-#[cfg(feature = "serde_cbor")]
+#[cfg(feature = "ciborium")]
 pub mod cbor;
-#[cfg(feature = "serde_cbor")]
+#[cfg(feature = "ciborium")]
 #[doc(inline)]
 pub use cbor::{validate_cbor, validate_cbor_bytes};
 

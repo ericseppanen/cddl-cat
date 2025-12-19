@@ -2,15 +2,15 @@ name: Build Features
 
 on:
   push:
-    branches: [ master, ci_testing ]
+    branches: [master, ci_testing]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
   cargo-build:
     strategy:
       matrix:
-        features: ["serde_cbor", "serde_json"]
+        features: ["ciborium", "serde_json"]
         rust_toolchain: [stable]
         os: [ubuntu-latest]
 

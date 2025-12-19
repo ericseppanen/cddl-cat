@@ -1,4 +1,4 @@
-#![cfg(feature = "serde_cbor")]
+#![cfg(feature = "ciborium")]
 
 use cddl_cat::cbor::validate_cbor_bytes;
 use cddl_cat::util::ErrorMatch;
@@ -39,6 +39,12 @@ pub mod cbor {
     pub const BYTES_1234:   &[u8] = b"\x44\x01\x02\x03\x04"; // hex 01020304
 
     pub const CBOR_INT_23:  &[u8] = b"\x41\x17"; // cbor(23)
+}
+
+fn cbor_to_vec(value: &impl Serialize) -> Result<Vec<u8>, ciborium::ser::Error<std::io::Error>> {
+    let mut result = Vec::new();
+    ciborium::into_writer(value, &mut result)?;
+    Ok(result)
 }
 
 #[test]
@@ -264,7 +270,7 @@ fn validate_cbor_homogenous_array() {
 
     let cddl_input = r#"thing = [? int]"#; // zero or one
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_EMPTY).unwrap();
-    let cbor_bytes = serde_cbor::to_vec(&[42]).unwrap();
+    let cbor_bytes = cbor_to_vec(&[42]).unwrap();
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
     let err = validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
     assert_eq!(err.to_string(), "Mismatch(expected shorter array)");
@@ -392,31 +398,31 @@ fn validate_cbor_array_record() {
     let cddl_input = r#"thing = [a: tstr, b: int]"#;
 
     let input = PersonTuple("Alice".to_string(), 42);
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
 
     let input = BackwardsTuple(43, "Carol".to_string());
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
 
     let input = LongTuple("David".to_string(), 44, 45);
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
 
     let input = ShortTuple("Eve".to_string());
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
 
     let cddl_input = r#"thing = [a: tstr, b: uint, c: float, d: bool]"#;
 
     let input = KitchenSink("xyz".to_string(), 17, 9.9, false);
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
 
     // FIXME: there isn't any way at present to serialize a struct
     // into a CBOR array. See https://github.com/pyfisch/cbor/issues/107
     //let input = PersonStruct{name: "Bob".to_string(), age: 43};
-    //let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    //let cbor_bytes = cbor_to_vec(&input).unwrap();
     //validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
 
     validate_cbor_bytes("thing", cddl_input, cbor::ARRAY_123).unwrap_err();
@@ -428,7 +434,7 @@ fn validate_cbor_map_unwrap() {
         name: "Bob".to_string(),
         age: 43,
     };
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     let cddl_input = r#"thing = {name: tstr, ~agroup} agroup = {age: int}"#;
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
 
@@ -444,7 +450,7 @@ fn validate_cbor_map_group() {
         name: "Bob".to_string(),
         age: 43,
     };
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     let cddl_input = r#"thing = {name: tstr, agroup} agroup = (age: int)"#;
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
 
@@ -493,7 +499,7 @@ fn validate_cbor_map() {
         name: "Bob".to_string(),
         age: 43,
     };
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     let cddl_input = r#"thing = {name: tstr, age: int}"#;
     validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap();
 
@@ -570,7 +576,7 @@ struct Pickup {
 fn validate_choice_example() {
     // This is an example from RFC8610 2.2.2
     // The only modification from the RFC example is to substitute "_" for "-" in barewords,
-    // for compatibility with serde_cbor.
+    // for compatibility with ciborium.
     let cddl_input = r#"
         address = { delivery }
 
@@ -588,7 +594,7 @@ fn validate_choice_example() {
         name: "San Francisco".to_string(),
         zip_code: 94103,
     };
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     validate_cbor_bytes("address", cddl_input, &cbor_bytes).unwrap();
 
     let input = StreetNumber {
@@ -597,11 +603,11 @@ fn validate_choice_example() {
         name: "San Francisco".to_string(),
         zip_code: 94103,
     };
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     validate_cbor_bytes("address", cddl_input, &cbor_bytes).unwrap();
 
     let input = Pickup { per_pickup: true };
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     validate_cbor_bytes("address", cddl_input, &cbor_bytes).unwrap();
 }
 
@@ -609,7 +615,7 @@ fn validate_choice_example() {
 fn validate_choiceify_example() {
     // This is an example from RFC8610 2.2.2
     // The only modification from the RFC example is to substitute "_" for "-" in barewords,
-    // for compatibility with serde_cbor.
+    // for compatibility with ciborium.
     let cddl_input = r#"
         terminal-color = &basecolors
         basecolors = (
@@ -641,7 +647,7 @@ fn test_fatal_propagation() {
     // Ensure that array choices can't conceal fatal errors.
     let cddl_input = r#"thing = [a: (bad_rule / tstr), b: int]"#;
     let input = PersonTuple("Alice".to_string(), 42);
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
     assert_eq!(err.to_string(), "MissingRule(bad_rule)");
 
@@ -650,7 +656,7 @@ fn test_fatal_propagation() {
         name: "Bob".to_string(),
         age: 43,
     };
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     let cddl_input = r#"thing = {name: (bad_rule / tstr), age: int}"#;
     let err = validate_cbor_bytes("thing", cddl_input, &cbor_bytes).unwrap_err();
     assert_eq!(err.to_string(), "MissingRule(bad_rule)");
@@ -713,7 +719,7 @@ fn cbor_control_cbor() {
 
 #[track_caller]
 fn validate_cbor_tstr(name: &str, cddl: &str, input: &str) -> ValidateResult {
-    let cbor_bytes = serde_cbor::to_vec(&input).unwrap();
+    let cbor_bytes = cbor_to_vec(&input).unwrap();
     validate_cbor_bytes(name, cddl, &cbor_bytes)
 }
 
