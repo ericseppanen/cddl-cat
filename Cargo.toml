@@ -24,7 +24,7 @@ nom = { version = "7.0.0", features = ["std"], default-features = false }
 hex = "0.4.0"
 strum_macros = "0.23.1"
 escape8259 = "0.5.0"
-base64 = "0.13.0"
+base64 = "0.22.1"
 thiserror = "1.0.8"
 regex = "1.5.5"
 

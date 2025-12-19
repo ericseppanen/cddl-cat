@@ -470,7 +470,8 @@ fn bytestring(input: &str) -> JResult<&str, Vec<u8>> {
         map(bytestring_utf8, |s| s.as_bytes().into()),
         map_res_fail(bytestring_hex, parse_hex),
         map_res_fail(bytestring_base64, |s| {
-            base64::decode_config(s, base64::URL_SAFE).map_err(|_| {
+            use base64::{engine::general_purpose::URL_SAFE, Engine as _};
+            URL_SAFE.decode(s).map_err(|_| {
                 parse_error(ErrorKind::MalformedBase64, s)
             })
         }),
