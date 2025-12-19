@@ -11,6 +11,22 @@
 //! assert!(parse_cddl(input).is_ok());
 //! ```
 
+// This occurs all over the place starting in rust 1.89.0.
+// It's a quirk of the way we handle nom IResult types, and I don't
+// have the patience to fix it now.
+//
+// warning: hiding a lifetime that's elided elsewhere is confusing
+//   --> src/parser/mod.rs:78:19
+//    |
+// 78 | fn comment(input: &str) -> JResult<&str, &str> {
+//    |                   ^^^^     ^^^^^^^^^^^^^^^^^^^
+//    |                   |        |       |     |
+//    |                   |        |       |     the same lifetime is elided here
+//    |                   |        |       the same lifetime is elided here
+//    |                   |        the same lifetime is hidden here
+//    |                   the lifetime is elided here
+#![allow(mismatched_lifetime_syntaxes)]
+
 use escape8259::unescape;
 use nom::{
     branch::alt,
