@@ -8,7 +8,7 @@
 //! The goal of this library is to make CBOR or JSON data easy to validate
 //! against a CDDL schema description.
 //!
-//! `cddl-cat` supports Rust 1.48 and later.
+//! `cddl-cat` supports Rust 1.81 and later.
 //!
 //! # Implementation Details
 //!
