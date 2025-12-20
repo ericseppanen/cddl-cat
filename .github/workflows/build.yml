@@ -10,7 +10,7 @@ jobs:
   cargo-build:
     strategy:
       matrix:
-        rust_toolchain: [stable, nightly, 1.48.0]
+        rust_toolchain: [stable, nightly, 1.81.0]
         os: [ubuntu-latest]
 
     name: Build
@@ -25,10 +25,6 @@ jobs:
           profile: minimal
           toolchain: ${{ matrix.rust_toolchain }}
           override: true
-
-      - name: enable Cargo.lock
-        if: ${{ matrix.rust_toolchain == '1.48.0' }}
-        run: cp .Cargo.lock.msrv Cargo.lock
 
       - name: cargo build
         uses: actions-rs/cargo@v1
