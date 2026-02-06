@@ -693,11 +693,27 @@ fn json_control_size() {
     validate_json_str("thing", cddl_input, "-256").err_mismatch();
 
     let cddl_input = r#"thing = tstr .size 10"#;
-    validate_json_str("thing", cddl_input, r#""""#).unwrap();
-    validate_json_str("thing", cddl_input, r#""JSON""#).unwrap();
-    validate_json_str("thing", cddl_input, r#""水""#).unwrap();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+    validate_json_str("thing", cddl_input, r#""JSON""#).err_mismatch();
+    validate_json_str("thing", cddl_input, r#""水""#).err_mismatch();
     validate_json_str("thing", cddl_input, r#""水水水水""#).err_mismatch();
     validate_json_str("thing", cddl_input, r#""abcdefghij""#).unwrap();
+    validate_json_str("thing", cddl_input, r#""abcdefghijk""#).err_mismatch();
+
+    let cddl_input = r#"thing = tstr .size (1..9)"#;
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+    validate_json_str("thing", cddl_input, r#""J""#).unwrap();
+    validate_json_str("thing", cddl_input, r#""水""#).unwrap();
+    validate_json_str("thing", cddl_input, r#""水水水""#).unwrap();
+    validate_json_str("thing", cddl_input, r#""abcdefghi""#).unwrap();
+    validate_json_str("thing", cddl_input, r#""abcdefghijk""#).err_mismatch();
+
+    let cddl_input = r#"thing = tstr .size (1...9)"#;
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+    validate_json_str("thing", cddl_input, r#""J""#).unwrap();
+    validate_json_str("thing", cddl_input, r#""水""#).unwrap();
+    validate_json_str("thing", cddl_input, r#""水水水""#).err_mismatch();
+    validate_json_str("thing", cddl_input, r#""abcdefghi""#).err_mismatch();
     validate_json_str("thing", cddl_input, r#""abcdefghijk""#).err_mismatch();
 
     // .size is not allowed on signed integers.
