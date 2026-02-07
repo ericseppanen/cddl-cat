@@ -1049,6 +1049,7 @@ fn validate_control(ctl: &Control, value: &Value, ctx: &Context) -> ValidateResu
     match ctl {
         Control::Size(ctl_size) => validate_control_size(ctl_size, value, ctx),
         Control::Lt(ctl_lt) => validate_control_lt(ctl_lt, value, ctx),
+        Control::Le(ctl_le) => validate_control_le(ctl_le, value, ctx),
         Control::Regexp(re) => validate_control_regexp(re, value),
         Control::Cbor(ctl_cbor) => validate_control_cbor(ctl_cbor, value, ctx),
     }
@@ -1123,6 +1124,35 @@ fn validate_control_lt(ctl: &CtlOpLt, value: &Value, ctx: &Context) -> ValidateR
             )),
             _ => {
                 let msg = format!("bad .lt target type ({})", target_node);
+                Err(ValidateError::Structural(msg))
+            }
+        }
+    })
+}
+
+fn validate_control_le(ctl: &CtlOpLe, value: &Value, ctx: &Context) -> ValidateResult {
+    // Resolve the limit to an integer literal (rules are allowed).
+    let le: i128 = chase_rules(&ctl.le, ctx, |le_node| {
+        match le_node {
+            Node::Literal(Literal::Int(i)) => Ok(*i),
+            _ => {
+                let msg = format!("bad .le argument type ({})", le_node);
+                Err(ValidateError::Structural(msg))
+            }
+        }
+    })?;
+
+    chase_rules(&ctl.target, ctx, |target_node| {
+        // Ensure the target type is compatible with `.le`, then validate.
+        match target_node {
+            Node::PreludeType(PreludeType::Uint) => validate_le_uint(le, value),
+            Node::PreludeType(PreludeType::Nint) => validate_le_nint(le, value),
+            Node::PreludeType(PreludeType::Int) => validate_le_int(le, value),
+            Node::PreludeType(PreludeType::Float) => Err(ValidateError::Structural(
+                ".le for float is not supported yet".into()
+            )),
+            _ => {
+                let msg = format!("bad .le target type ({})", target_node);
                 Err(ValidateError::Structural(msg))
             }
         }
@@ -1337,6 +1367,52 @@ fn validate_lt_int(lt: i128, value: &Value) -> ValidateResult {
                 Ok(())
             } else {
                 Err(mismatch("int over .lt limit"))
+            }
+        }
+        _ => Err(mismatch("int")),
+    }
+}
+
+fn validate_le_uint(lt: i128, value: &Value) -> ValidateResult {
+    match value {
+        Value::Integer(x) => {
+            // uint domain restriction
+            if *x < 0 {
+                Err(mismatch("uint"))
+            }
+            else if *x <= lt {
+                Ok(())
+            } else {
+                Err(mismatch("uint over .le limit"))
+            }
+        }
+        _ => Err(mismatch("uint")),
+    }
+}
+
+fn validate_le_nint(lt: i128, value: &Value) -> ValidateResult {
+    match value {
+        Value::Integer(x) => {
+            // nint domain restriction: must be negative
+            if *x >= 0 {
+                Err(mismatch("nint"))
+            } else if *x <= lt {
+                Ok(())
+            } else {
+                Err(mismatch("nint over .lt limit"))
+            }
+        }
+        _ => Err(mismatch("nint")),
+    }
+}
+
+fn validate_le_int(lt: i128, value: &Value) -> ValidateResult {
+    match value {
+        Value::Integer(x) => {
+            if *x <= lt {
+                Ok(())
+            } else {
+                Err(mismatch("int over .le limit"))
             }
         }
         _ => Err(mismatch("int")),

@@ -109,6 +109,7 @@ fn flatten_control(ctl: &ast::TypeControl) -> FlattenResult<Node> {
     let ctl_result = match ctl.op.as_str() {
         "size" => control_size(ctl)?,
         "lt" => control_lt(ctl)?,
+        "le" => control_le(ctl)?,
         "regexp" => control_regex(ctl)?,
         "cbor" => control_cbor(ctl)?,
         _ => return Err(ValidateError::Unsupported("control operator".into())),
@@ -143,14 +144,14 @@ fn control_size(ctl: &ast::TypeControl) -> FlattenResult<Control> {
 
 // Handle the "lt" control operator:
 // <target> .lt <integer literal>
-// The only allowed targets are numeric (integers and floats).
+// The only allowed targets are integers.
 //
 fn control_lt(ctl: &ast::TypeControl) -> FlattenResult<Control> {
     let target = flatten_type2(&ctl.target)?;
     let lt = flatten_type2(&ctl.arg)?;
 
     // The only allowed limit types are:
-    // A positive literal integer
+    // A literal integer
     // A named rule (which should resolve to a literal integer)
     match lt {
         Node::Literal(Literal::Int(_)) => {}
@@ -161,6 +162,29 @@ fn control_lt(ctl: &ast::TypeControl) -> FlattenResult<Control> {
     Ok(Control::Lt(CtlOpLt {
         target: Box::new(target),
         lt: Box::new(lt),
+    }))
+}
+
+// Handle the "le" control operator:
+// <target> .le <integer literal>
+// The only allowed targets are integers.
+//
+fn control_le(ctl: &ast::TypeControl) -> FlattenResult<Control> {
+    let target = flatten_type2(&ctl.target)?;
+    let le = flatten_type2(&ctl.arg)?;
+
+    // The only allowed limit types are:
+    // A literal integer
+    // A named rule (which should resolve to a literal integer)
+    match le {
+        Node::Literal(Literal::Int(_)) => {}
+        Node::Rule(_) => {}
+        _ => return Err(ValidateError::Unsupported(".le limit type".into())),
+    };
+
+    Ok(Control::Le(CtlOpLe {
+        target: Box::new(target),
+        le: Box::new(le),
     }))
 }
 

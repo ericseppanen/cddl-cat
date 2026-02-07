@@ -378,6 +378,8 @@ pub enum Control {
     Size(CtlOpSize),
     /// Limit the numeric value by the upper bound (exclusive).
     Lt(CtlOpLt),
+    /// Limit the numeric value by the upper bound (inclusive).
+    Le(CtlOpLe),
     /// Apply a regular expression to a text string.
     Regexp(CtlOpRegexp),
     /// Validate a nested CBOR bytestring
@@ -423,6 +425,29 @@ pub struct CtlOpLt {
     ///
     /// This must resolve (via rules) to an integer literal.
     pub lt: Box<Node>,
+}
+
+/// Control Operator `.le`
+///
+/// `.le` is defined in RFC 8610 section 3.8.6.
+/// It sets an inclusive upper bound on the numeric value.
+///
+/// For example, `uint .le 10` permits only integers from 0 to 10.
+///
+/// Note: while RFC 8610 defines `.le` for both integers and floating-point
+/// numbers, this implementation currently supports integer comparisons only.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CtlOpLe {
+    /// The type that is limit-constrained.
+    ///
+    /// Only numeric types are permitted. In this implementation,
+    /// `.le` applies to integer values.
+    pub target: Box<Node>,
+
+    /// The numeric limit.
+    ///
+    /// This must resolve (via rules) to an integer literal.
+    pub le: Box<Node>,
 }
 
 /// Control Operator `.regexp`
