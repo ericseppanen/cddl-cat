@@ -382,6 +382,8 @@ pub enum Control {
     Le(CtlOpLe),
     /// Limit the numeric value by the lower bound (exclusive).
     Gt(CtlOpGt),
+    /// Limit the numeric value by the lower bound (inclusive).
+    Ge(CtlOpGe),
     /// Apply a regular expression to a text string.
     Regexp(CtlOpRegexp),
     /// Validate a nested CBOR bytestring
@@ -473,6 +475,29 @@ pub struct CtlOpGt {
     ///
     /// This must resolve (via rules) to an integer literal.
     pub gt: Box<Node>,
+}
+
+/// Control Operator `.ge`
+///
+/// `.ge` is defined in RFC 8610 section 3.8.6.
+/// It sets an exclusive lower bound on the numeric value.
+///
+/// For example, `uint .ge 10` permits only integers bigger than 10 (inclusive).
+///
+/// Note: while RFC 8610 defines `.ge` for both integers and floating-point
+/// numbers, this implementation currently supports integer comparisons only.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CtlOpGe {
+    /// The type that is limit-constrained.
+    ///
+    /// Only numeric types are permitted. In this implementation,
+    /// `.ge` applies to integer values.
+    pub target: Box<Node>,
+
+    /// The numeric limit.
+    ///
+    /// This must resolve (via rules) to an integer literal.
+    pub ge: Box<Node>,
 }
 
 /// Control Operator `.regexp`

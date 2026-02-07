@@ -1051,6 +1051,7 @@ fn validate_control(ctl: &Control, value: &Value, ctx: &Context) -> ValidateResu
         Control::Lt(ctl_lt) => validate_control_lt(ctl_lt, value, ctx),
         Control::Le(ctl_le) => validate_control_le(ctl_le, value, ctx),
         Control::Gt(ctl_gt) => validate_control_gt(ctl_gt, value, ctx),
+        Control::Ge(ctl_ge) => validate_control_ge(ctl_ge, value, ctx),
         Control::Regexp(re) => validate_control_regexp(re, value),
         Control::Cbor(ctl_cbor) => validate_control_cbor(ctl_cbor, value, ctx),
     }
@@ -1183,6 +1184,35 @@ fn validate_control_gt(ctl: &CtlOpGt, value: &Value, ctx: &Context) -> ValidateR
             )),
             _ => {
                 let msg = format!("bad .gt target type ({})", target_node);
+                Err(ValidateError::Structural(msg))
+            }
+        }
+    })
+}
+
+fn validate_control_ge(ctl: &CtlOpGe, value: &Value, ctx: &Context) -> ValidateResult {
+    // Resolve the limit to an integer literal (rules are allowed).
+    let ge: i128 = chase_rules(&ctl.ge, ctx, |ge_node| {
+        match ge_node {
+            Node::Literal(Literal::Int(i)) => Ok(*i),
+            _ => {
+                let msg = format!("bad .ge argument type ({})", ge_node);
+                Err(ValidateError::Structural(msg))
+            }
+        }
+    })?;
+
+    chase_rules(&ctl.target, ctx, |target_node| {
+        // Ensure the target type is compatible with `.ge`, then validate.
+        match target_node {
+            Node::PreludeType(PreludeType::Uint) => validate_ge_uint(ge, value),
+            Node::PreludeType(PreludeType::Nint) => validate_ge_nint(ge, value),
+            Node::PreludeType(PreludeType::Int) => validate_ge_int(ge, value),
+            Node::PreludeType(PreludeType::Float) => Err(ValidateError::Structural(
+                ".ge for float is not supported yet".into()
+            )),
+            _ => {
+                let msg = format!("bad .ge target type ({})", target_node);
                 Err(ValidateError::Structural(msg))
             }
         }
@@ -1488,7 +1518,53 @@ fn validate_gt_int(lt: i128, value: &Value) -> ValidateResult {
             if *x > lt {
                 Ok(())
             } else {
-                Err(mismatch("int over .gt limit"))
+                Err(mismatch("int over .ge limit"))
+            }
+        }
+        _ => Err(mismatch("int")),
+    }
+}
+
+fn validate_ge_uint(lt: i128, value: &Value) -> ValidateResult {
+    match value {
+        Value::Integer(x) => {
+            // uint domain restriction
+            if *x < 0 {
+                Err(mismatch("uint"))
+            }
+            else if *x >= lt {
+                Ok(())
+            } else {
+                Err(mismatch("uint under .ge limit"))
+            }
+        }
+        _ => Err(mismatch("uint")),
+    }
+}
+
+fn validate_ge_nint(lt: i128, value: &Value) -> ValidateResult {
+    match value {
+        Value::Integer(x) => {
+            // nint domain restriction: must be negative
+            if *x >= 0 {
+                Err(mismatch("nint"))
+            } else if *x >= lt {
+                Ok(())
+            } else {
+                Err(mismatch("nint over .ge limit"))
+            }
+        }
+        _ => Err(mismatch("nint")),
+    }
+}
+
+fn validate_ge_int(lt: i128, value: &Value) -> ValidateResult {
+    match value {
+        Value::Integer(x) => {
+            if *x >= lt {
+                Ok(())
+            } else {
+                Err(mismatch("int over .ge limit"))
             }
         }
         _ => Err(mismatch("int")),

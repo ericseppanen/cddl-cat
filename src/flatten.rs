@@ -102,7 +102,7 @@ fn flatten_type1(ty1: &ast::Type1) -> FlattenResult<Node> {
 // .regexp
 // .cbor .cborseq
 // .within .and
-// .lt .le .gt .ge .eq .ne. default
+// .eq .ne. default
 // According to RFC 8610 3.8, new control operators may arrive later.
 //
 fn flatten_control(ctl: &ast::TypeControl) -> FlattenResult<Node> {
@@ -111,6 +111,7 @@ fn flatten_control(ctl: &ast::TypeControl) -> FlattenResult<Node> {
         "lt" => control_lt(ctl)?,
         "le" => control_le(ctl)?,
         "gt" => control_gt(ctl)?,
+        "ge" => control_ge(ctl)?,
         "regexp" => control_regex(ctl)?,
         "cbor" => control_cbor(ctl)?,
         _ => return Err(ValidateError::Unsupported("control operator".into())),
@@ -209,6 +210,29 @@ fn control_gt(ctl: &ast::TypeControl) -> FlattenResult<Control> {
     Ok(Control::Gt(CtlOpGt {
         target: Box::new(target),
         gt: Box::new(gt),
+    }))
+}
+
+// Handle the "ge" control operator:
+// <target> .ge <integer literal>
+// The only allowed targets are integers.
+//
+fn control_ge(ctl: &ast::TypeControl) -> FlattenResult<Control> {
+    let target = flatten_type2(&ctl.target)?;
+    let ge = flatten_type2(&ctl.arg)?;
+
+    // The only allowed limit types are:
+    // A literal integer
+    // A named rule (which should resolve to a literal integer)
+    match ge {
+        Node::Literal(Literal::Int(_)) => {}
+        Node::Rule(_) => {}
+        _ => return Err(ValidateError::Unsupported(".ge limit type".into())),
+    };
+
+    Ok(Control::Ge(CtlOpGe {
+        target: Box::new(target),
+        ge: Box::new(ge),
     }))
 }
 
