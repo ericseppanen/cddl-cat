@@ -21,6 +21,7 @@ pub mod cbor {
     pub const INT_65535:    &[u8] = b"\x19\xff\xff";
     pub const INT_65536:    &[u8] = b"\x1a\x00\x01\x00\x00";
     pub const INT_1T:       &[u8] = b"\x1b\x00\x00\x00\xe8\xd4\xa5\x10\x00";
+    pub const NINT_1:       &[u8] = b"\x20";  // -1
     pub const NINT_1000:    &[u8] = b"\x39\x03\xe7";  // -1000
 
     pub const FLOAT_0_0:    &[u8] = b"\xf9\x00\x00";            // #7.25 (f16)
@@ -740,6 +741,79 @@ fn cbor_control_size() {
 
     let cddl_input = r#"thing = bstr .size -1"#;
     validate_cbor_bytes("thing", cddl_input, cbor::BYTES_EMPTY).unwrap_err();
+}
+
+#[test]
+fn cbor_control_lt() {
+    let cddl_input = r#"thing = uint .lt 1"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_0).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::NINT_1000).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).err_mismatch();
+
+    let cddl_input = r#"thing = uint .lt 0"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_0).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::NINT_1000).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).err_mismatch();
+
+    let cddl_input = r#"thing = uint .lt -1"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_0).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::NINT_1000).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).err_mismatch();
+
+    let cddl_input = r#"thing = uint .lt 18446744073709551615"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).unwrap();
+
+    let cddl_input = r#"thing = nint .lt 0"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::NINT_1).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_0).err_mismatch();
+
+    let cddl_input = r#"thing = nint .lt 1"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_0).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::NINT_1000).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).err_mismatch();
+
+    let cddl_input = r#"thing = nint .lt -999"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_0).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::NINT_1000).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).err_mismatch();
+
+    let cddl_input = r#"thing = nint .lt -1000"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_0).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::NINT_1000).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).err_mismatch();
+
+    let cddl_input = r#"thing = int .lt 1"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_0).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::NINT_1000).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).err_mismatch();
+
+    let cddl_input = r#"thing = int .lt -999"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_0).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::NINT_1000).unwrap();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).err_mismatch();
+
+    let cddl_input = r#"thing = int .lt -1000"#;
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_0).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::INT_1T).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::NINT_1000).err_mismatch();
+    validate_cbor_bytes("thing", cddl_input, cbor::TEXT_EMPTY).err_mismatch();
 }
 
 #[test]
