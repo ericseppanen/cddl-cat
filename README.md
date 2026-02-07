@@ -99,14 +99,14 @@ Supported CDDL features:
 - Turn a group into a choice (`&`)
 - Map keys with cut syntax (`^ =>`)
 - Generic types
-- Control operators `.cbor`, `.size`, and `.regexp`
+- Control operators `.cbor`, `.size`, `.lt`, `.le`, `.gt`, `.ge`, and `.regexp`
 
 Unimplemented CDDL features:
 - Extend type with `/=`
 - Extend group with `//=`
 - Type sockets with `$`
 - Group sockets with `$$`
-- Control operators other than those above (e.g. `.bits`, `.lt`, `.gt`...)
+- Control operators other than those above (e.g. `.bits`, `.eq`, ...)
 - Group enumeration with `&`
 - Tagged data with `#`
 - Hexfloat literals (e.g. `0x1.921fb5p+1`)
