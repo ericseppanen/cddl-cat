@@ -12,15 +12,17 @@
 //! ```
 //!
 
+use std::collections::BTreeMap;
+use std::convert::TryFrom;
+
+use serde_json::Value as JSON_Value;
+
 use crate::context::{BasicContext, LookupContext};
 use crate::flatten::flatten_from_str;
 use crate::ivt::RuleDef;
 use crate::util::{ValidateError, ValidateResult};
 use crate::validate::do_validate;
 use crate::value::Value;
-use serde_json::Value as JSON_Value;
-use std::collections::BTreeMap;
-use std::convert::TryFrom;
 
 // Convert JSON `Value`s to the local `Value` type that the validate code
 // uses.

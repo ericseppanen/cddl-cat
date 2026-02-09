@@ -2,16 +2,15 @@
 //!
 //! More precisely, it validates data that can be represented by [`Value`] trees.
 
-use crate::context::LookupContext;
-use crate::ivt::*;
-use crate::util::{mismatch, ValidateError, ValidateResult};
-use crate::value::Value;
-use std::collections::BTreeMap; // used in Value::Map
-use std::collections::HashMap;
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::convert::TryInto;
 use std::mem::discriminant;
+
+use crate::context::LookupContext;
+use crate::ivt::*;
 use crate::normalize::normalize_size_range;
+use crate::util::{mismatch, ValidateError, ValidateResult};
+use crate::value::Value;
 
 // A map from generic parameter name to the type being used here.
 #[derive(Clone, Debug, Default)]
@@ -1083,9 +1082,7 @@ fn validate_control_cbor(ctl_cbor: &CtlOpCbor, value: &Value, ctx: &Context) -> 
 }
 
 fn validate_control_size(ctl: &CtlOpSize, value: &Value, ctx: &Context) -> ValidateResult {
-    let size: Range = chase_rules(&ctl.size, ctx, |size_node| {
-        normalize_size_range(size_node)
-    })?;
+    let size: Range = chase_rules(&ctl.size, ctx, |size_node| normalize_size_range(size_node))?;
 
     chase_rules(&ctl.target, ctx, |target_node| {
         // Ensure that the target node evaluates to some type that is
@@ -1105,13 +1102,11 @@ fn validate_control_size(ctl: &CtlOpSize, value: &Value, ctx: &Context) -> Valid
 
 fn validate_control_lt(ctl: &CtlOpLt, value: &Value, ctx: &Context) -> ValidateResult {
     // Resolve the limit to an integer literal (rules are allowed).
-    let lt: i128 = chase_rules(&ctl.lt, ctx, |lt_node| {
-        match lt_node {
-            Node::Literal(Literal::Int(i)) => Ok(*i),
-            _ => {
-                let msg = format!("bad .lt argument type ({})", lt_node);
-                Err(ValidateError::Structural(msg))
-            }
+    let lt: i128 = chase_rules(&ctl.lt, ctx, |lt_node| match lt_node {
+        Node::Literal(Literal::Int(i)) => Ok(*i),
+        _ => {
+            let msg = format!("bad .lt argument type ({})", lt_node);
+            Err(ValidateError::Structural(msg))
         }
     })?;
 
@@ -1122,7 +1117,7 @@ fn validate_control_lt(ctl: &CtlOpLt, value: &Value, ctx: &Context) -> ValidateR
             Node::PreludeType(PreludeType::Nint) => validate_lt_nint(lt, value),
             Node::PreludeType(PreludeType::Int) => validate_lt_int(lt, value),
             Node::PreludeType(PreludeType::Float) => Err(ValidateError::Structural(
-                ".lt for float is not supported yet".into()
+                ".lt for float is not supported yet".into(),
             )),
             _ => {
                 let msg = format!("bad .lt target type ({})", target_node);
@@ -1134,13 +1129,11 @@ fn validate_control_lt(ctl: &CtlOpLt, value: &Value, ctx: &Context) -> ValidateR
 
 fn validate_control_le(ctl: &CtlOpLe, value: &Value, ctx: &Context) -> ValidateResult {
     // Resolve the limit to an integer literal (rules are allowed).
-    let le: i128 = chase_rules(&ctl.le, ctx, |le_node| {
-        match le_node {
-            Node::Literal(Literal::Int(i)) => Ok(*i),
-            _ => {
-                let msg = format!("bad .le argument type ({})", le_node);
-                Err(ValidateError::Structural(msg))
-            }
+    let le: i128 = chase_rules(&ctl.le, ctx, |le_node| match le_node {
+        Node::Literal(Literal::Int(i)) => Ok(*i),
+        _ => {
+            let msg = format!("bad .le argument type ({})", le_node);
+            Err(ValidateError::Structural(msg))
         }
     })?;
 
@@ -1151,7 +1144,7 @@ fn validate_control_le(ctl: &CtlOpLe, value: &Value, ctx: &Context) -> ValidateR
             Node::PreludeType(PreludeType::Nint) => validate_le_nint(le, value),
             Node::PreludeType(PreludeType::Int) => validate_le_int(le, value),
             Node::PreludeType(PreludeType::Float) => Err(ValidateError::Structural(
-                ".le for float is not supported yet".into()
+                ".le for float is not supported yet".into(),
             )),
             _ => {
                 let msg = format!("bad .le target type ({})", target_node);
@@ -1163,13 +1156,11 @@ fn validate_control_le(ctl: &CtlOpLe, value: &Value, ctx: &Context) -> ValidateR
 
 fn validate_control_gt(ctl: &CtlOpGt, value: &Value, ctx: &Context) -> ValidateResult {
     // Resolve the limit to an integer literal (rules are allowed).
-    let gt: i128 = chase_rules(&ctl.gt, ctx, |gt_node| {
-        match gt_node {
-            Node::Literal(Literal::Int(i)) => Ok(*i),
-            _ => {
-                let msg = format!("bad .gt argument type ({})", gt_node);
-                Err(ValidateError::Structural(msg))
-            }
+    let gt: i128 = chase_rules(&ctl.gt, ctx, |gt_node| match gt_node {
+        Node::Literal(Literal::Int(i)) => Ok(*i),
+        _ => {
+            let msg = format!("bad .gt argument type ({})", gt_node);
+            Err(ValidateError::Structural(msg))
         }
     })?;
 
@@ -1180,7 +1171,7 @@ fn validate_control_gt(ctl: &CtlOpGt, value: &Value, ctx: &Context) -> ValidateR
             Node::PreludeType(PreludeType::Nint) => validate_gt_nint(gt, value),
             Node::PreludeType(PreludeType::Int) => validate_gt_int(gt, value),
             Node::PreludeType(PreludeType::Float) => Err(ValidateError::Structural(
-                ".gt for float is not supported yet".into()
+                ".gt for float is not supported yet".into(),
             )),
             _ => {
                 let msg = format!("bad .gt target type ({})", target_node);
@@ -1192,13 +1183,11 @@ fn validate_control_gt(ctl: &CtlOpGt, value: &Value, ctx: &Context) -> ValidateR
 
 fn validate_control_ge(ctl: &CtlOpGe, value: &Value, ctx: &Context) -> ValidateResult {
     // Resolve the limit to an integer literal (rules are allowed).
-    let ge: i128 = chase_rules(&ctl.ge, ctx, |ge_node| {
-        match ge_node {
-            Node::Literal(Literal::Int(i)) => Ok(*i),
-            _ => {
-                let msg = format!("bad .ge argument type ({})", ge_node);
-                Err(ValidateError::Structural(msg))
-            }
+    let ge: i128 = chase_rules(&ctl.ge, ctx, |ge_node| match ge_node {
+        Node::Literal(Literal::Int(i)) => Ok(*i),
+        _ => {
+            let msg = format!("bad .ge argument type ({})", ge_node);
+            Err(ValidateError::Structural(msg))
         }
     })?;
 
@@ -1209,7 +1198,7 @@ fn validate_control_ge(ctl: &CtlOpGe, value: &Value, ctx: &Context) -> ValidateR
             Node::PreludeType(PreludeType::Nint) => validate_ge_nint(ge, value),
             Node::PreludeType(PreludeType::Int) => validate_ge_int(ge, value),
             Node::PreludeType(PreludeType::Float) => Err(ValidateError::Structural(
-                ".ge for float is not supported yet".into()
+                ".ge for float is not supported yet".into(),
             )),
             _ => {
                 let msg = format!("bad .ge target type ({})", target_node);
@@ -1239,15 +1228,19 @@ fn validate_control_regexp(re: &CtlOpRegexp, value: &Value) -> ValidateResult {
 fn validate_size_uint(size: &Range, value: &Value) -> ValidateResult {
     let (start_i, end_i) = match (size.start.as_ref(), size.end.as_ref()) {
         (Node::Literal(Literal::Int(a)), Node::Literal(Literal::Int(b))) => (*a, *b),
-        _ => return Err(ValidateError::Structural("bad .size range endpoints for uint".into())),
+        _ => {
+            return Err(ValidateError::Structural(
+                "bad .size range endpoints for uint".into(),
+            ))
+        }
     };
 
-    let start_u: u64 = start_i.try_into().map_err(|_| {
-        ValidateError::Structural(format!("bad .size limit {}", start_i))
-    })?;
-    let end_u: u64 = end_i.try_into().map_err(|_| {
-        ValidateError::Structural(format!("bad .size limit {}", end_i))
-    })?;
+    let start_u: u64 = start_i
+        .try_into()
+        .map_err(|_| ValidateError::Structural(format!("bad .size limit {}", start_i)))?;
+    let end_u: u64 = end_i
+        .try_into()
+        .map_err(|_| ValidateError::Structural(format!("bad .size limit {}", end_i)))?;
 
     if start_u > end_u || (start_u == end_u && !size.inclusive) {
         return Err(mismatch("uint over .size limit"));
@@ -1317,15 +1310,19 @@ fn validate_size_uint(size: &Range, value: &Value) -> ValidateResult {
 fn validate_size_tstr(size: &Range, value: &Value) -> ValidateResult {
     let (start_i, end_i) = match (size.start.as_ref(), size.end.as_ref()) {
         (Node::Literal(Literal::Int(a)), Node::Literal(Literal::Int(b))) => (*a, *b),
-        _ => return Err(ValidateError::Structural("bad .size range endpoints for tstr".into())),
+        _ => {
+            return Err(ValidateError::Structural(
+                "bad .size range endpoints for tstr".into(),
+            ))
+        }
     };
 
-    let min_u: u64 = start_i.try_into().map_err(|_| {
-        ValidateError::Structural(format!("bad .size limit {}", start_i))
-    })?;
-    let max_u: u64 = end_i.try_into().map_err(|_| {
-        ValidateError::Structural(format!("bad .size limit {}", end_i))
-    })?;
+    let min_u: u64 = start_i
+        .try_into()
+        .map_err(|_| ValidateError::Structural(format!("bad .size limit {}", start_i)))?;
+    let max_u: u64 = end_i
+        .try_into()
+        .map_err(|_| ValidateError::Structural(format!("bad .size limit {}", end_i)))?;
 
     if min_u > max_u || (min_u == max_u && !size.inclusive) {
         return Err(mismatch("tstr over .size limit"));
@@ -1339,7 +1336,11 @@ fn validate_size_tstr(size: &Range, value: &Value) -> ValidateResult {
                 return Err(mismatch("tstr under .size limit"));
             }
 
-            let ok_max = if size.inclusive { len_u <= max_u } else { len_u < max_u };
+            let ok_max = if size.inclusive {
+                len_u <= max_u
+            } else {
+                len_u < max_u
+            };
             if !ok_max {
                 return Err(mismatch("tstr over .size limit"));
             }
@@ -1354,15 +1355,19 @@ fn validate_size_tstr(size: &Range, value: &Value) -> ValidateResult {
 fn validate_size_bstr(size: &Range, value: &Value) -> ValidateResult {
     let (start_i, end_i) = match (size.start.as_ref(), size.end.as_ref()) {
         (Node::Literal(Literal::Int(a)), Node::Literal(Literal::Int(b))) => (*a, *b),
-        _ => return Err(ValidateError::Structural("bad .size range endpoints for bstr".into())),
+        _ => {
+            return Err(ValidateError::Structural(
+                "bad .size range endpoints for bstr".into(),
+            ))
+        }
     };
 
-    let min_u: u64 = start_i.try_into().map_err(|_| {
-        ValidateError::Structural(format!("bad .size limit {}", start_i))
-    })?;
-    let max_u: u64 = end_i.try_into().map_err(|_| {
-        ValidateError::Structural(format!("bad .size limit {}", end_i))
-    })?;
+    let min_u: u64 = start_i
+        .try_into()
+        .map_err(|_| ValidateError::Structural(format!("bad .size limit {}", start_i)))?;
+    let max_u: u64 = end_i
+        .try_into()
+        .map_err(|_| ValidateError::Structural(format!("bad .size limit {}", end_i)))?;
 
     if min_u > max_u || (min_u == max_u && !size.inclusive) {
         return Err(mismatch("bstr over .size limit"));
@@ -1376,7 +1381,11 @@ fn validate_size_bstr(size: &Range, value: &Value) -> ValidateResult {
                 return Err(mismatch("bstr under .size limit"));
             }
 
-            let ok_max = if size.inclusive { len_u <= max_u } else { len_u < max_u };
+            let ok_max = if size.inclusive {
+                len_u <= max_u
+            } else {
+                len_u < max_u
+            };
             if !ok_max {
                 return Err(mismatch("bstr over .size limit"));
             }
@@ -1393,8 +1402,7 @@ fn validate_lt_uint(lt: i128, value: &Value) -> ValidateResult {
             // uint domain restriction
             if *x < 0 {
                 Err(mismatch("uint"))
-            }
-            else if *x < lt {
+            } else if *x < lt {
                 Ok(())
             } else {
                 Err(mismatch("uint over .lt limit"))
@@ -1439,8 +1447,7 @@ fn validate_le_uint(lt: i128, value: &Value) -> ValidateResult {
             // uint domain restriction
             if *x < 0 {
                 Err(mismatch("uint"))
-            }
-            else if *x <= lt {
+            } else if *x <= lt {
                 Ok(())
             } else {
                 Err(mismatch("uint over .le limit"))
@@ -1485,8 +1492,7 @@ fn validate_gt_uint(lt: i128, value: &Value) -> ValidateResult {
             // uint domain restriction
             if *x < 0 {
                 Err(mismatch("uint"))
-            }
-            else if *x > lt {
+            } else if *x > lt {
                 Ok(())
             } else {
                 Err(mismatch("uint under .gt limit"))
@@ -1531,8 +1537,7 @@ fn validate_ge_uint(lt: i128, value: &Value) -> ValidateResult {
             // uint domain restriction
             if *x < 0 {
                 Err(mismatch("uint"))
-            }
-            else if *x >= lt {
+            } else if *x >= lt {
                 Ok(())
             } else {
                 Err(mismatch("uint under .ge limit"))

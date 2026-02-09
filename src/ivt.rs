@@ -6,10 +6,12 @@
 //! This module doesn't know anything about validating specific types (e.g.
 //! CBOR or JSON), but it helps make writing those validators easier.
 
-use crate::ast;
 use std::collections::BTreeMap;
 use std::fmt;
+
 use strum_macros::{Display, IntoStaticStr};
+
+use crate::ast;
 
 /// The definition of a CDDL rule.
 ///

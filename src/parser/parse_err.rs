@@ -1,8 +1,9 @@
 //! Parser error types and related utilities
 //!
 
-use nom::error::FromExternalError;
 use std::borrow::Cow;
+
+use nom::error::FromExternalError;
 use thiserror::Error;
 
 /// The "kind" of error generated during CDDL parsing.

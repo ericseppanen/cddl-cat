@@ -1,9 +1,11 @@
 //! This module defines error and result types.
 //!
 
-use crate::parser;
 use std::result::Result;
+
 use thiserror::Error;
+
+use crate::parser;
 
 /// A basic error type that contains a string.
 #[allow(missing_docs)]

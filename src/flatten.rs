@@ -7,13 +7,14 @@
 //! [`ivt`]: crate::ivt
 //! [`ast`]: crate::ast
 
+use std::convert::TryInto;
+
 use regex::RegexBuilder;
 
 use crate::ast;
 use crate::ivt::*;
 use crate::parser::{parse_cddl, slice_parse_cddl};
 use crate::util::ValidateError;
-use std::convert::TryInto;
 
 /// The result of a flatten operation.
 pub type FlattenResult<T> = std::result::Result<T, ValidateError>;

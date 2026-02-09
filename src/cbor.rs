@@ -56,15 +56,17 @@
 //! validate_cbor(&rule_def, &cbor_value, &ctx).unwrap();
 //! ```
 
+use std::collections::BTreeMap;
+use std::convert::TryFrom;
+
+use ciborium::Value as CBOR_Value;
+
 use crate::context::{BasicContext, LookupContext};
 use crate::flatten::flatten_from_str;
 use crate::ivt::RuleDef;
 use crate::util::{ValidateError, ValidateResult};
 use crate::validate::do_validate;
 use crate::value::Value;
-use ciborium::Value as CBOR_Value;
-use std::collections::BTreeMap;
-use std::convert::TryFrom;
 
 // These conversions seem obvious and pointless, but over time they may
 // diverge.  However, CDDL and CBOR were designed to work with one another, so

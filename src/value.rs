@@ -1,8 +1,9 @@
 //! This module declares a generic Value enum for use with validation.
 
-use float_ord::FloatOrd;
 use std::collections::BTreeMap;
 use std::fmt;
+
+use float_ord::FloatOrd;
 
 /// `Value` represents all the types of data we can validate.
 ///
