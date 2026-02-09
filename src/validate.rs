@@ -1082,7 +1082,7 @@ fn validate_control_cbor(ctl_cbor: &CtlOpCbor, value: &Value, ctx: &Context) -> 
 }
 
 fn validate_control_size(ctl: &CtlOpSize, value: &Value, ctx: &Context) -> ValidateResult {
-    let size: Range = chase_rules(&ctl.size, ctx, |size_node| normalize_size_range(size_node))?;
+    let size: Range = chase_rules(&ctl.size, ctx, normalize_size_range)?;
 
     chase_rules(&ctl.target, ctx, |target_node| {
         // Ensure that the target node evaluates to some type that is
@@ -1281,7 +1281,7 @@ fn validate_size_uint(size: &Range, value: &Value) -> ValidateResult {
                 0
             } else {
                 let bits = 128u32 - v.leading_zeros(); // 1..128
-                ((bits as u64) + 7) / 8
+                (bits as u64).div_ceil(8)
             };
 
             // Enforce lower bound (inclusive)
