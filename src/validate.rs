@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::convert::TryInto;
 use std::mem::discriminant;
+use crate::normalize::normalize_size_range;
 
 // A map from generic parameter name to the type being used here.
 #[derive(Clone, Debug, Default)]
@@ -1078,33 +1079,17 @@ fn validate_control_cbor(ctl_cbor: &CtlOpCbor, value: &Value, ctx: &Context) -> 
 }
 
 fn validate_control_size(ctl: &CtlOpSize, value: &Value, ctx: &Context) -> ValidateResult {
-    // Follow the chain of rules references until we wind up with a non-Rule node.
-    let size: u64 = chase_rules(&ctl.size, ctx, |size_node| {
-        // Compute the size in bytes
-        match size_node {
-            Node::Literal(Literal::Int(i)) => (*i).try_into().map_err(|_| {
-                // Note the parser doesn't handle >64 bit positive integers.
-                // Under normal circumstances, the only way this can occur is
-                // when the limit is negative.
-                let msg = format!("bad .size limit {}", i);
-                ValidateError::Structural(msg)
-            }),
-            _ => {
-                // Under normal circumstances this error is unreachable
-                // because the flatten code will only allow literal integer sizes.
-                let msg = format!("bad .size argument type ({})", size_node);
-                Err(ValidateError::Structural(msg))
-            }
-        }
+    let size: Range = chase_rules(&ctl.size, ctx, |size_node| {
+        normalize_size_range(size_node)
     })?;
 
     chase_rules(&ctl.target, ctx, |target_node| {
         // Ensure that the target node evaluates to some type that is
         // compatible with the .size operator, and then validate the size limit.
         match target_node {
-            Node::PreludeType(PreludeType::Uint) => validate_size_uint(size, value),
-            Node::PreludeType(PreludeType::Tstr) => validate_size_tstr(size, value),
-            Node::PreludeType(PreludeType::Bstr) => validate_size_bstr(size, value),
+            Node::PreludeType(PreludeType::Uint) => validate_size_uint(&size, value),
+            Node::PreludeType(PreludeType::Tstr) => validate_size_tstr(&size, value),
+            Node::PreludeType(PreludeType::Bstr) => validate_size_bstr(&size, value),
             _ => {
                 let msg = format!("bad .size target type ({})", target_node);
 
@@ -1131,21 +1116,77 @@ fn validate_control_regexp(re: &CtlOpRegexp, value: &Value) -> ValidateResult {
     }
 }
 
-fn validate_size_uint(size: u64, value: &Value) -> ValidateResult {
+fn validate_size_uint(size: &Range, value: &Value) -> ValidateResult {
+    let (start_i, end_i) = match (size.start.as_ref(), size.end.as_ref()) {
+        (Node::Literal(Literal::Int(a)), Node::Literal(Literal::Int(b))) => (*a, *b),
+        _ => return Err(ValidateError::Structural("bad .size range endpoints for uint".into())),
+    };
+
+    let start_u: u64 = start_i.try_into().map_err(|_| {
+        ValidateError::Structural(format!("bad .size limit {}", start_i))
+    })?;
+    let end_u: u64 = end_i.try_into().map_err(|_| {
+        ValidateError::Structural(format!("bad .size limit {}", end_i))
+    })?;
+
+    if start_u > end_u || (start_u == end_u && !size.inclusive) {
+        return Err(mismatch("uint over .size limit"));
+    }
+
     match value {
         Value::Integer(x) => {
             if *x < 0 {
-                Err(mismatch(".size on negative integer"))
-            } else if size >= 16 {
-                // If the size is 16 or larger, the i128 value will always fit.
-                Ok(())
-            } else {
-                let mask = (1i128 << (size * 8)) - 1;
-                if *x & !mask == 0 {
+                return Err(mismatch(".size on negative integer"));
+            }
+
+            // Degenerate case (normalized literal `.size N` -> [N..N]):
+            // For uint, spec defines `.size N` as value-range 0...(256**N), NOT "needs exactly N bytes".
+            if start_u == end_u && size.inclusive {
+                let n = end_u;
+
+                // If N is 16 or larger, any non-negative i128 is < 2^127, hence < 2^(8N) for N>=16.
+                if n >= 16 {
+                    return Ok(());
+                }
+
+                // Require x < 256**N  (exclusive upper bound)
+                let limit = 1i128 << (n * 8);
+                return if *x < limit {
                     Ok(())
                 } else {
                     Err(mismatch("uint over .size limit"))
-                }
+                };
+            }
+
+            // Proper range semantics: constrain the *minimal required* number of bytes.
+            // required bytes:
+            // 0 -> 0
+            // 1..255 -> 1
+            // 256..65535 -> 2, etc.
+            let v: u128 = *x as u128;
+            let needed: u64 = if v == 0 {
+                0
+            } else {
+                let bits = 128u32 - v.leading_zeros(); // 1..128
+                ((bits as u64) + 7) / 8
+            };
+
+            // Enforce lower bound (inclusive)
+            if needed < start_u {
+                return Err(mismatch("uint under .size limit"));
+            }
+
+            // Enforce upper bound (inclusive/exclusive)
+            let ok_max = if size.inclusive {
+                needed <= end_u
+            } else {
+                needed < end_u
+            };
+
+            if ok_max {
+                Ok(())
+            } else {
+                Err(mismatch("uint over .size limit"))
             }
         }
         _ => Err(mismatch("uint")),
@@ -1153,30 +1194,74 @@ fn validate_size_uint(size: u64, value: &Value) -> ValidateResult {
 }
 
 // Check the size of a text string.
-fn validate_size_tstr(size: u64, value: &Value) -> ValidateResult {
+fn validate_size_tstr(size: &Range, value: &Value) -> ValidateResult {
+    let (start_i, end_i) = match (size.start.as_ref(), size.end.as_ref()) {
+        (Node::Literal(Literal::Int(a)), Node::Literal(Literal::Int(b))) => (*a, *b),
+        _ => return Err(ValidateError::Structural("bad .size range endpoints for tstr".into())),
+    };
+
+    let min_u: u64 = start_i.try_into().map_err(|_| {
+        ValidateError::Structural(format!("bad .size limit {}", start_i))
+    })?;
+    let max_u: u64 = end_i.try_into().map_err(|_| {
+        ValidateError::Structural(format!("bad .size limit {}", end_i))
+    })?;
+
+    if min_u > max_u || (min_u == max_u && !size.inclusive) {
+        return Err(mismatch("tstr over .size limit"));
+    }
+
     match value {
         Value::Text(s) => {
-            let size: usize = size.try_into().unwrap_or(usize::MAX);
-            if s.len() > size {
-                Err(mismatch("tstr over .size limit"))
-            } else {
-                Ok(())
+            let len_u: u64 = s.len() as u64;
+
+            if len_u < min_u {
+                return Err(mismatch("tstr under .size limit"));
             }
+
+            let ok_max = if size.inclusive { len_u <= max_u } else { len_u < max_u };
+            if !ok_max {
+                return Err(mismatch("tstr over .size limit"));
+            }
+
+            Ok(())
         }
         _ => Err(mismatch("tstr")),
     }
 }
 
 // Check the size of a byte string.
-fn validate_size_bstr(size: u64, value: &Value) -> ValidateResult {
+fn validate_size_bstr(size: &Range, value: &Value) -> ValidateResult {
+    let (start_i, end_i) = match (size.start.as_ref(), size.end.as_ref()) {
+        (Node::Literal(Literal::Int(a)), Node::Literal(Literal::Int(b))) => (*a, *b),
+        _ => return Err(ValidateError::Structural("bad .size range endpoints for bstr".into())),
+    };
+
+    let min_u: u64 = start_i.try_into().map_err(|_| {
+        ValidateError::Structural(format!("bad .size limit {}", start_i))
+    })?;
+    let max_u: u64 = end_i.try_into().map_err(|_| {
+        ValidateError::Structural(format!("bad .size limit {}", end_i))
+    })?;
+
+    if min_u > max_u || (min_u == max_u && !size.inclusive) {
+        return Err(mismatch("bstr over .size limit"));
+    }
+
     match value {
         Value::Bytes(b) => {
-            let size: usize = size.try_into().unwrap_or(usize::MAX);
-            if b.len() > size {
-                Err(mismatch("bstr over .size limit"))
-            } else {
-                Ok(())
+            let len_u: u64 = b.len().try_into().unwrap_or(u64::MAX);
+
+            if len_u < min_u {
+                return Err(mismatch("bstr under .size limit"));
             }
+
+            let ok_max = if size.inclusive { len_u <= max_u } else { len_u < max_u };
+            if !ok_max {
+                return Err(mismatch("bstr over .size limit"));
+            }
+
+            Ok(())
         }
         _ => Err(mismatch("bstr")),
     }

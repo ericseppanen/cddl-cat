@@ -143,6 +143,8 @@ pub use cbor::{validate_cbor, validate_cbor_bytes};
 
 #[cfg(feature = "serde_json")]
 pub mod json;
+pub mod normalize;
+
 #[cfg(feature = "serde_json")]
 #[doc(inline)]
 pub use json::{validate_json, validate_json_str};

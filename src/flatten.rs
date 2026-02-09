@@ -129,6 +129,7 @@ fn control_size(ctl: &ast::TypeControl) -> FlattenResult<Control> {
     // A named rule (which should resolve to a literal integer)
     match size {
         Node::Literal(Literal::Int(_)) => {}
+        Node::Range(_) => {}
         Node::Rule(_) => {}
         _ => return Err(ValidateError::Unsupported(".size limit type".into())),
     };
