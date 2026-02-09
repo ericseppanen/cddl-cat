@@ -376,6 +376,14 @@ impl fmt::Display for Range {
 pub enum Control {
     /// Limit the size in bytes.
     Size(CtlOpSize),
+    /// Limit the numeric value by the upper bound (exclusive).
+    Lt(CtlOpLt),
+    /// Limit the numeric value by the upper bound (inclusive).
+    Le(CtlOpLe),
+    /// Limit the numeric value by the lower bound (exclusive).
+    Gt(CtlOpGt),
+    /// Limit the numeric value by the lower bound (inclusive).
+    Ge(CtlOpGe),
     /// Apply a regular expression to a text string.
     Regexp(CtlOpRegexp),
     /// Validate a nested CBOR bytestring
@@ -398,6 +406,98 @@ pub struct CtlOpSize {
     pub target: Box<Node>,
     /// The size limit, in bytes.
     pub size: Box<Node>,
+}
+
+/// Control Operator `.lt`
+///
+/// `.lt` is defined in RFC 8610 section 3.8.6.
+/// It sets an exclusive upper bound on the numeric value.
+///
+/// For example, `uint .lt 10` permits only integers from 0 to 9.
+///
+/// Note: while RFC 8610 defines `.lt` for both integers and floating-point
+/// numbers, this implementation currently supports integer comparisons only.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CtlOpLt {
+    /// The type that is limit-constrained.
+    ///
+    /// Only numeric types are permitted. In this implementation,
+    /// `.lt` applies to integer values.
+    pub target: Box<Node>,
+
+    /// The numeric limit.
+    ///
+    /// This must resolve (via rules) to an integer literal.
+    pub lt: Box<Node>,
+}
+
+/// Control Operator `.le`
+///
+/// `.le` is defined in RFC 8610 section 3.8.6.
+/// It sets an inclusive upper bound on the numeric value.
+///
+/// For example, `uint .le 10` permits only integers from 0 to 10.
+///
+/// Note: while RFC 8610 defines `.le` for both integers and floating-point
+/// numbers, this implementation currently supports integer comparisons only.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CtlOpLe {
+    /// The type that is limit-constrained.
+    ///
+    /// Only numeric types are permitted. In this implementation,
+    /// `.le` applies to integer values.
+    pub target: Box<Node>,
+
+    /// The numeric limit.
+    ///
+    /// This must resolve (via rules) to an integer literal.
+    pub le: Box<Node>,
+}
+
+/// Control Operator `.gt`
+///
+/// `.gt` is defined in RFC 8610 section 3.8.6.
+/// It sets an exclusive lower bound on the numeric value.
+///
+/// For example, `uint .gt 10` permits only integers bigger than 10 (exclusive).
+///
+/// Note: while RFC 8610 defines `.gt` for both integers and floating-point
+/// numbers, this implementation currently supports integer comparisons only.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CtlOpGt {
+    /// The type that is limit-constrained.
+    ///
+    /// Only numeric types are permitted. In this implementation,
+    /// `.gt` applies to integer values.
+    pub target: Box<Node>,
+
+    /// The numeric limit.
+    ///
+    /// This must resolve (via rules) to an integer literal.
+    pub gt: Box<Node>,
+}
+
+/// Control Operator `.ge`
+///
+/// `.ge` is defined in RFC 8610 section 3.8.6.
+/// It sets an exclusive lower bound on the numeric value.
+///
+/// For example, `uint .ge 10` permits only integers bigger than 10 (inclusive).
+///
+/// Note: while RFC 8610 defines `.ge` for both integers and floating-point
+/// numbers, this implementation currently supports integer comparisons only.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CtlOpGe {
+    /// The type that is limit-constrained.
+    ///
+    /// Only numeric types are permitted. In this implementation,
+    /// `.ge` applies to integer values.
+    pub target: Box<Node>,
+
+    /// The numeric limit.
+    ///
+    /// This must resolve (via rules) to an integer literal.
+    pub ge: Box<Node>,
 }
 
 /// Control Operator `.regexp`

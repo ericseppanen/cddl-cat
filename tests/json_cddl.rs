@@ -730,6 +730,330 @@ fn json_control_size() {
 }
 
 #[test]
+fn json_control_lt() {
+    let cddl_input = r#"thing = uint .lt 1"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch(); // INT_1T
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch(); // NINT_1000
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch(); // TEXT_EMPTY
+
+    let cddl_input = r#"thing = uint .lt 0"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = uint .lt -1"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = uint .lt 18446744073709551615"#;
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+
+    let cddl_input = r#"thing = nint .lt 0"#;
+    validate_json_str("thing", cddl_input, "-1").unwrap(); // NINT_1
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+
+    let cddl_input = r#"thing = nint .lt 1"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").unwrap();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = nint .lt -999"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").unwrap();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = nint .lt -1000"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = int .lt 1"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").unwrap();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = int .lt -999"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").unwrap();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = int .lt -1000"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+}
+
+#[test]
+fn json_control_le() {
+    let cddl_input = r#"thing = uint .le 1"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "1").unwrap();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = uint .le 0"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = uint .le -1"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = uint .le 18446744073709551615"#;
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+
+    let cddl_input = r#"thing = nint .le 0"#;
+    validate_json_str("thing", cddl_input, "-1").unwrap();
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+
+    let cddl_input = r#"thing = nint .le 1"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").unwrap();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = nint .le -999"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").unwrap();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = nint .le -1000"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").unwrap();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = int .le 1"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "1").unwrap();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").unwrap();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = int .le -999"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").unwrap();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = int .le -1000"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").unwrap();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+}
+
+#[test]
+fn json_control_gt() {
+    let cddl_input = r#"thing = uint .gt 1"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = uint .gt 0"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").unwrap();
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = uint .gt -1"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "1").unwrap();
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = uint .gt 18446744073709551615"#;
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+
+    let cddl_input = r#"thing = nint .gt 0"#;
+    validate_json_str("thing", cddl_input, "-1").err_mismatch();
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+
+    let cddl_input = r#"thing = nint .gt 1"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = nint .gt -2"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1").unwrap();
+    validate_json_str("thing", cddl_input, "-2").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = nint .gt -999"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1").unwrap();
+    validate_json_str("thing", cddl_input, "-999").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = nint .gt -1000"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1").unwrap();
+    validate_json_str("thing", cddl_input, "-999").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = int .gt 1"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = int .gt -999"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "1").unwrap();
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+    validate_json_str("thing", cddl_input, "-999").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = int .gt -1000"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "1").unwrap();
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+    validate_json_str("thing", cddl_input, "-999").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+}
+
+#[test]
+fn json_control_ge() {
+    let cddl_input = r#"thing = uint .ge 1"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").unwrap();
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = uint .ge 0"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "1").unwrap();
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = uint .ge -1"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "1").unwrap();
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+    validate_json_str("thing", cddl_input, "-1").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = uint .ge 18446744073709551615"#;
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+
+    let cddl_input = r#"thing = nint .ge 0"#;
+    validate_json_str("thing", cddl_input, "-1").err_mismatch();
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+
+    let cddl_input = r#"thing = nint .ge 1"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = nint .ge -2"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1").unwrap();
+    validate_json_str("thing", cddl_input, "-2").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = nint .ge -999"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1").unwrap();
+    validate_json_str("thing", cddl_input, "-999").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = nint .ge -1000"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").err_mismatch();
+    validate_json_str("thing", cddl_input, "1000000000000").err_mismatch();
+    validate_json_str("thing", cddl_input, "-1").unwrap();
+    validate_json_str("thing", cddl_input, "-999").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").unwrap();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = int .ge 1"#;
+    validate_json_str("thing", cddl_input, "0").err_mismatch();
+    validate_json_str("thing", cddl_input, "1").unwrap();
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = int .ge -999"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "1").unwrap();
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+    validate_json_str("thing", cddl_input, "-999").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").err_mismatch();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+
+    let cddl_input = r#"thing = int .ge -1000"#;
+    validate_json_str("thing", cddl_input, "0").unwrap();
+    validate_json_str("thing", cddl_input, "1").unwrap();
+    validate_json_str("thing", cddl_input, "1000000000000").unwrap();
+    validate_json_str("thing", cddl_input, "-999").unwrap();
+    validate_json_str("thing", cddl_input, "-1000").unwrap();
+    validate_json_str("thing", cddl_input, r#""""#).err_mismatch();
+}
+
+#[test]
 fn json_control_regexp() {
     // Should match strings that look like integers with no leading zeroes.
     let cddl_input = r#" nolz = tstr .regexp "^(0|[1-9][0-9]*)$" "#;
