@@ -15,7 +15,7 @@
 //! - Supports CBOR and JSON encodings, controlled by the `ciborium` and
 //!   `serde_json` features.
 //!
-//! - An "Intermediate Validation Tree" ([`ivt`]) is constructed
+//! - An "Intermediate Validation Tree" ([`ivt`](crate::ivt)) is constructed
 //!   from the CDDL AST; this removes some of the CDDL syntax detail resulting
 //!   in a simplified tree that can be more easily validated. The IVT is
 //!   constructed almost entirely of [`Node`](crate::ivt::Node) elements,
@@ -104,14 +104,14 @@
 //! - Turn a group into a choice (`&`)
 //! - Map keys with cut syntax (`^ =>`)
 //! - Generic types
-//! - Control operators `.cbor`, `.size`, and `.regexp`
+//! - Control operators `.cbor`, `.size`, `.lt`, `.le`, `.gt`, `.ge`, and `.regexp`
 //!
 //! Unimplemented CDDL features:
 //! - Extend type with `/=`
 //! - Extend group with `//=`
 //! - Type sockets with `$`
 //! - Group sockets with `$$`
-//! - Control operators other than those above (e.g. `.bits`, `.lt`, `.gt`...)
+//! - Control operators other than those above (e.g. `.bits`, `.eq`, ...)
 //! - Group enumeration with `&`
 //! - Tagged data with `#`
 //! - Hexfloat literals (e.g. `0x1.921fb5p+1`)
