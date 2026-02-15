@@ -15,7 +15,7 @@
 //! - Supports CBOR and JSON encodings, controlled by the `ciborium` and
 //!   `serde_json` features.
 //!
-//! - An "Intermediate Validation Tree" ([`ivt`](crate::ivt)) is constructed
+//! - An "Intermediate Validation Tree" ([`ivt`]) is constructed
 //!   from the CDDL AST; this removes some of the CDDL syntax detail resulting
 //!   in a simplified tree that can be more easily validated. The IVT is
 //!   constructed almost entirely of [`Node`](crate::ivt::Node) elements,
