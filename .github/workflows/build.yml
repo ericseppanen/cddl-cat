@@ -2,9 +2,9 @@ name: Build and Test
 
 on:
   push:
-    branches: [master, ci_testing]
+    branches: [main, ci_testing]
   pull_request:
-    branches: [master]
+    branches: [main]
 
 jobs:
   cargo-build:
