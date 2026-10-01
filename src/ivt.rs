@@ -266,7 +266,7 @@ impl Occur {
             OccurLimit::ZeroOrMore => "*".into(),
             OccurLimit::OneOrMore => "+".into(),
             OccurLimit::Numbered(n, m) => match (n, m) {
-                (0, std::usize::MAX) => format!("{}*", n),
+                (0, usize::MAX) => format!("{}*", n),
                 (_, _) => format!("{}*{}", n, m),
             },
         }
